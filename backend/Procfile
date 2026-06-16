@@ -1,0 +1,13 @@
+# Process types for the Jobora backend.
+#
+# Railway uses railway.json (Dockerfile build) for the web service and a per-
+# service start command for the worker; this Procfile documents both process
+# types and also works for Procfile-based hosts (Render workers, Heroku).
+#
+# web    — runs DB migrations (alembic upgrade head) then uvicorn on $PORT.
+# worker — RQ worker consuming the "submissions" queue (no migrations; the web
+#          process owns migrations to avoid races). Only needed when REDIS_URL is
+#          set and you want submissions processed out-of-process (recommended at
+#          scale; the API runs an in-process worker by default for low volume).
+web: ./entrypoint.sh
+worker: rq worker submissions --url $REDIS_URL

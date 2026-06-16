@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+jobora.db
+uploads/*.pdf
+.env

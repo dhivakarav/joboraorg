@@ -1,0 +1,64 @@
+# Render Blueprint — provisions the full Jobara stack.
+# Deploy: push to GitHub, then Render Dashboard → New → Blueprint → pick this repo.
+# Docs: https://render.com/docs/blueprint-spec
+databases:
+  - name: jobara-db
+    databaseName: jobara
+    plan: free          # bump to starter+ for production
+    postgresMajorVersion: "16"
+
+services:
+  # --- Redis (managed key-value) ---
+  - type: keyvalue
+    name: jobara-redis
+    plan: free
+    ipAllowList: []     # only accessible from Render services
+    maxmemoryPolicy: allkeys-lru
+
+  # --- FastAPI backend ---
+  - type: web
+    name: jobara-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /api/health
+    # entrypoint.sh runs `alembic upgrade head` before uvicorn, so migrations
+    # apply on every deploy automatically.
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jobara-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: jobara-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true          # Render generates a strong secret
+      - key: CREDENTIAL_KEY
+        sync: false                  # set manually (must be a Fernet key)
+      - key: CORS_ORIGINS
+        sync: false                  # set to your static site URL
+      - key: APP_BASE_URL
+        sync: false
+      - key: EXPOSE_RESET_TOKEN
+        value: "0"
+      - key: LOG_LEVEL
+        value: INFO
+      # SMTP_* and provider keys: add in the dashboard as needed.
+
+  # --- React SPA (static site, built by Vite) ---
+  - type: web
+    name: jobara-web
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false                  # set to https://jobara-api.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html     # SPA fallback

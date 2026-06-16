@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-bg text-white font-sans antialiased;
+    margin: 0;
+  }
+  /* Scrollbar — keep it monochrome to match the theme. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a0a0a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2a;
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface border border-line rounded-card shadow-glossy;
+  }
+  .card-elevated {
+    @apply bg-elevated border border-line rounded-card shadow-glossylg;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  /* Primary CTA: white bg, black text. */
+  .btn-primary {
+    @apply btn bg-white text-black hover:bg-[#e0e0e0];
+  }
+  .btn-ghost {
+    @apply btn border border-line text-white hover:bg-elevated;
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:opacity-90;
+  }
+  .btn-success {
+    @apply btn bg-success text-black hover:opacity-90;
+  }
+  .input {
+    @apply w-full rounded-btn bg-input border border-inputline text-white px-3 py-2 text-sm placeholder-muted outline-none focus:border-white transition-colors;
+  }
+  .label {
+    @apply block text-xs font-medium text-muted mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-elevated border border-line px-3 py-1 text-sm;
+  }
+}

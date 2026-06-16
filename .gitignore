@@ -1,0 +1,23 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+backend/jobora.db
+*.db
+# Uploaded résumés + application evidence (PII) — never publish. Keep only the placeholder.
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Env
+.env
+*.local
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
