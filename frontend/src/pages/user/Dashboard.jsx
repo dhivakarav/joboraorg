@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, getToken, BASE } from "../../api/client";
-import { StatCard, StatusBadge, Spinner, useToast } from "../../components/UI";
+import { ApplyModeBadge, StatCard, StatusBadge, Spinner, useToast } from "../../components/UI";
 import { useAuth } from "../../context/AuthContext";
 import HowItWorks from "../../components/HowItWorks";
 
@@ -9,6 +9,8 @@ export default function Dashboard() {
   const toast = useToast();
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [pending, setPending] = useState(null);
   const [hasResume, setHasResume] = useState(null);
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState([]);
@@ -25,8 +27,38 @@ export default function Dashboard() {
     }
   }
 
+  function loadPending() {
+    api.get("/apply/pending").then(setPending).catch(() => {});
+  }
+
+  const [refreshing, setRefreshing] = useState(false);
+  async function loadAnalytics(refresh = false) {
+    if (refresh) setRefreshing(true);
+    try {
+      const qs = refresh ? "?location=India&refresh=true" : "?location=India";
+      setAnalytics(await api.get(`/jobs/analytics${qs}`));
+    } catch (e) {
+      /* analytics is best-effort */
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function approve(ids) {
+    try {
+      const r = await api.post("/apply/approve", ids ? { application_ids: ids } : { all: true });
+      toast(r.message, r.live_ready ? "success" : "info");
+      loadPending();
+      loadStats();
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  }
+
   useEffect(() => {
     loadStats();
+    loadPending();
+    loadAnalytics();
     api.get("/apply/status").then((s) => s.running && openStream());
     return () => esRef.current?.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,6 +80,7 @@ export default function Dashboard() {
         setRunning(false);
         es.close();
         loadStats();
+        loadPending();
         toast(data.message || "Finished", "success");
       }
       if (data.type === "error") toast(data.message, "error");
@@ -110,6 +143,61 @@ export default function Dashboard() {
         hasApplied={stats.total > 0}
       />
 
+      {/* Approval gate — auto-apply jobs are NEVER submitted without explicit confirmation. */}
+      {pending && pending.items.length > 0 && (
+        <div className="card p-5 space-y-3 border-amber-400/40">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="font-semibold text-amber-300">
+                {pending.items.length} application(s) awaiting your approval
+              </h2>
+              <p className="text-xs text-muted">
+                Nothing has been submitted. Review and confirm to apply.
+                {" "}Resume: <span className="text-white">{pending.resume_version}</span>.
+                {!pending.live_ready && (
+                  <span className="text-yellow-400"> · Live mode is OFF — approving will mark these
+                    “Manual Apply Required”, not submit them.</span>
+                )}
+              </p>
+            </div>
+            {/* Bulk action is DE-EMPHASISED + guarded: it submits every job in the
+                list at once, so it must look distinct from the per-job Confirm and
+                require an explicit extra confirmation. */}
+            <button
+              className="btn-ghost whitespace-nowrap border-amber-500/50 text-amber-300"
+              onClick={() => {
+                const n = pending.items.length;
+                if (window.confirm(
+                  `Submit ALL ${n} applications at once?\n\nThis applies to every job in the list below — not just one. ` +
+                  `To apply to a single job, cancel this and use the “Confirm” button on that specific row instead.`
+                )) approve(null);
+              }}>
+              ⚠ Confirm ALL {pending.items.length} &amp; Submit
+            </button>
+          </div>
+          <div className="divide-y divide-line rounded-btn border border-line">
+            {pending.items.map((j) => (
+              <div key={j.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="truncate">
+                    <span className="text-white">About to apply to:</span> {j.job_title}
+                    {" "}<span className="text-muted">at {j.company}</span>
+                  </div>
+                  <div className="text-xs text-muted">
+                    {j.platform} · {j.location || "—"} · {j.match_score}% match · using {pending.resume_version}
+                  </div>
+                </div>
+                {/* Per-job Confirm is now the PRIMARY (prominent) action — it
+                    submits only this one row. */}
+                <button className="btn-primary whitespace-nowrap" onClick={() => approve([j.id])}>
+                  Confirm this job
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatCard label="Verified Submitted" value={stats.verified_submitted} accent="text-success" />
         <StatCard label="Submitted" value={stats.submitted} accent="text-blue-300" />
@@ -117,6 +205,40 @@ export default function Dashboard() {
         <StatCard label="Tracked" value={stats.tracked} accent="text-blue-300" />
         <StatCard label="Total" value={stats.total} />
       </div>
+
+      {/* Provider / discovery analytics */}
+      {analytics && (
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">Job Discovery Analytics</h2>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted">
+                {analytics.live_providers}/{analytics.total_providers} sources live ·
+                {" "}last sync {new Date(analytics.last_sync).toLocaleTimeString()}
+              </span>
+              <button className="btn-ghost text-xs" disabled={refreshing}
+                      onClick={() => loadAnalytics(true)}
+                      title="Bypass cache, pull the freshest live listings">
+                {refreshing ? "Refreshing…" : "↻ Refresh"}
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <StatCard label="Jobs discovered" value={analytics.jobs_discovered} />
+            <StatCard label="Internships" value={analytics.internships} accent="text-blue-300" />
+            <StatCard label="Freshers" value={analytics.freshers} accent="text-blue-300" />
+            <StatCard label="AI/ML jobs" value={analytics.ai_ml} accent="text-purple-300" />
+            <StatCard label="Coverage" value={`${analytics.coverage_percentage}%`} accent="text-success" />
+          </div>
+          {analytics.by_source && (
+            <div className="flex flex-wrap gap-2 text-xs pt-1">
+              {Object.entries(analytics.by_source).sort((a, b) => b[1] - a[1]).map(([s, n]) => (
+                <span key={s} className="badge border-line text-muted">{s}: {n}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {(running || log.length > 0) && (
         <div className="card p-5">
@@ -227,7 +349,10 @@ function Table({ rows }) {
               <td className="py-2.5 pr-4">{r.job_title}</td>
               <td className="py-2.5 pr-4 text-muted">{r.company}</td>
               <td className="py-2.5 pr-4">
-                <StatusBadge status={r.display_status} />
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={r.display_status} />
+                  <ApplyModeBadge mode={r.application_mode} />
+                </div>
               </td>
             </tr>
           ))}

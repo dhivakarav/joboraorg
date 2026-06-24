@@ -5,7 +5,14 @@ import EvidenceModal from "../../components/EvidenceModal";
 
 // Verification Center — proof of every submission attempt: application ID,
 // confirmation URL, screenshot evidence, timestamp, portal, verification status.
-const APPLY_STATES = ["Verified Submitted", "Submitted", "Manual Apply", "Failed"];
+//
+// A "submission attempt" = a row where the system ACTUALLY tried an auto-submission
+// (success or fail). "Manual Apply" rows are link-outs the system never submitted,
+// so they are NOT attempts and are excluded from the count.
+const ATTEMPT_STATES = [
+  "Verified Submitted", "Submitted", "Submitted (Unverified)",
+  "Failed", "Failed — No Confirmation", "Failed — Form Not Found", "Failed — Submit Not Found",
+];
 
 export default function VerificationCenter() {
   const toast = useToast();
@@ -25,10 +32,12 @@ export default function VerificationCenter() {
 
   if (!rows) return <Spinner />;
 
-  // Submission attempts only (exclude pure Tracked/Draft).
-  let items = rows.filter((r) => APPLY_STATES.includes(r.display_status));
+  // Real auto-submission attempts only (exclude Manual Apply, Tracked, Draft, etc.).
+  let items = rows.filter((r) => ATTEMPT_STATES.includes(r.display_status));
   if (onlyVerified) items = items.filter((r) => r.display_status === "Verified Submitted");
   const verifiedCount = rows.filter((r) => r.display_status === "Verified Submitted").length;
+  const attemptCount = items.length;
+  const manualCount = rows.filter((r) => r.display_status === "Manual Apply").length;
 
   return (
     <div className="space-y-6">
@@ -42,8 +51,8 @@ export default function VerificationCenter() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="Verified Submitted" value={verifiedCount} accent="text-success" />
-        <Stat label="Submission attempts" value={rows.filter((r) => APPLY_STATES.includes(r.display_status)).length} />
-        <Stat label="Tracked (not submitted)" value={rows.filter((r) => r.display_status === "Tracked").length} accent="text-blue-300" />
+        <Stat label="Submission attempts" value={attemptCount} />
+        <Stat label="Manual apply (not submitted)" value={manualCount} accent="text-yellow-400" />
         <Stat label="Total applications" value={rows.length} />
       </div>
 
@@ -56,8 +65,10 @@ export default function VerificationCenter() {
       <div className="card p-5">
         {items.length === 0 ? (
           <p className="text-sm text-muted py-8 text-center">
-            No submission attempts yet. Apply to a role from <b className="text-white">Find Jobs</b> —
-            assisted applies (Lever/Ashby) let you record your confirmation here.
+            No submission attempts yet. Apply to a role from <b className="text-white">Find Jobs</b>.
+            Auto-Apply sources whose forms are captcha-gated (Lever/Ashby) fall back to{" "}
+            <b className="text-white">Assisted Apply</b> — Jobora prefills the form, you complete the
+            captcha and submit, then record your confirmation here.
           </p>
         ) : (
           <div className="overflow-x-auto">

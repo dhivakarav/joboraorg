@@ -113,6 +113,7 @@ class FiltersIn(BaseModel):
     keywords: List[str] = []
     min_salary: int = 500
     daily_limit: int = 20
+    min_match_score: int = 50      # 0-100; hide/skip jobs below this resume match
 
 
 class FiltersOut(FiltersIn):
@@ -124,6 +125,7 @@ class JobOut(BaseModel):
     fingerprint: str
     external_id: str = ""
     source: str
+    source_domain: str = ""        # platform domain the apply URL lives on
     title: str
     company: str
     location: str
@@ -150,6 +152,8 @@ class JobOut(BaseModel):
     platform: str = ""
     auto_submit: bool = False
     manual_required: bool = True
+    application_mode: str = "manual_link_provided"   # auto_applied | manual_link_provided
+    auto_apply_supported: bool = False               # source is an auto-capable ATS
     applied: bool = False  # has this user already applied/saved it
 
 
@@ -160,7 +164,10 @@ class JobSearchOut(BaseModel):
     hidden_ineligible: int = 0  # roles hidden as not-eligible (senior/PhD/visa/3+ yrs)
     internships_only: bool = False   # whether the internships-&-new-grad hard filter is active
     filtered_generic: int = 0        # eligible-but-no-early-signal roles hidden by the hard filter
+    filtered_low_match: int = 0      # jobs hidden below the min match-score threshold
+    min_match: int = 0               # the match threshold applied this request
     internshala_coverage: dict = {}  # Internshala source analytics (total/internships/fresher/ai_ml/software)
+    internshala_search: dict = {}    # "Search on Internshala" deep-link (India + intern/fresher contexts)
 
 
 class ApplyIntentIn(BaseModel):
@@ -223,6 +230,33 @@ class GreenhouseApplyIn(BaseModel):
     approved: bool = False    # must be True — explicit confirmation
 
 
+class InternshalaApplyIn(BaseModel):
+    """Explicit, user-triggered LIVE Internshala application (Option B).
+
+    Runs only with JOBORA_LIVE=1 + the user's stored Internshala credentials +
+    a user-reviewed cover letter. `approved` must be True.
+    """
+    fingerprint: str
+    source: str
+    title: str
+    company: str
+    location: str = ""
+    salary: str = ""
+    salary_inr: str = ""
+    apply_url: str
+    verified: bool = False
+    cover_letter: str = ""    # user-reviewed; we never write it for them
+    answers: dict = {}        # any extra user-reviewed answers
+    approved: bool = False    # must be True — explicit confirmation
+
+
+class PlatformCredentialIn(BaseModel):
+    """Store a user's own login for a platform (encrypted at rest)."""
+    platform: str = "Internshala"
+    username: str             # login email / username
+    password: str
+
+
 class EvidenceOut(BaseModel):
     application_id: int             # the DB row id
     display_status: str = "Draft"   # canonical, evidence-gated status
@@ -254,11 +288,15 @@ class ApplicationOut(BaseModel):
     verified: bool = False
     match_score: int = 0
     manual_required: bool = False
+    application_mode: str = "manual_link_provided"   # auto_applied | manual_link_provided
     # `status` is the raw internal lifecycle hint; clients MUST render
     # `display_status` instead (canonical, evidence-gated — never "Applied").
     status: str
     display_status: str = "Draft"
     submission_status: str = "Draft"
+    # The raw user-set pipeline stage (or "") — the Stage dropdown renders this
+    # directly so all 6 stages round-trip, independent of submission_status.
+    pipeline_stage: str = ""
     application_id: str = ""
     external_application_id: str = ""
     confirmation_url: str = ""

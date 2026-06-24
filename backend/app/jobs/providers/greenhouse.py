@@ -17,6 +17,9 @@ from ..base import Provider, RawJob
 DEFAULT_BOARDS = [
     "stripe", "airbnb", "dropbox", "coinbase", "databricks", "gitlab",
     "robinhood", "doordash", "instacart", "figma",
+    # India-hiring boards (verified live; strong Bengaluru/Hyderabad/Chennai/Pune
+    # presence). Extend via GREENHOUSE_BOARDS.
+    "phonepe", "sigmoid", "postman", "groww", "druva", "slice", "observeai",
 ]
 ENDPOINT = "https://boards-api.greenhouse.io/v1/boards/{board}/jobs"
 
@@ -33,7 +36,11 @@ class GreenhouseProvider(Provider):
 
     async def _fetch_board(self, client, board: str) -> List[RawJob]:
         try:
-            r = await client.get(ENDPOINT.format(board=board), params={"content": "false"})
+            # content=true returns the job DESCRIPTIONS in the same single request.
+            # Without them, description_snippet is empty and the resume matcher only
+            # sees the title → near-identical match scores across very different
+            # roles. The descriptions give the matcher real per-listing skill text.
+            r = await client.get(ENDPOINT.format(board=board), params={"content": "true"})
             r.raise_for_status()
         except Exception:
             return []
@@ -48,6 +55,7 @@ class GreenhouseProvider(Provider):
                 location=loc,
                 remote="remote" in loc.lower(),
                 posted_at=(j.get("updated_at") or "")[:10],
+                description_snippet=j.get("content", "") or "",   # HTML; _clean strips tags
                 external_id=f"gh-{board}-{j.get('id')}",
                 company_domain="greenhouse.io",
             ))

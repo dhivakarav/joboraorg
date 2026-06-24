@@ -45,19 +45,47 @@ DEGREE_KEYWORDS = [
 
 # Common Indian + global city hints for a light location guess.
 LOCATION_HINTS = [
-    "bangalore", "bengaluru", "mumbai", "delhi", "new delhi", "hyderabad",
-    "chennai", "pune", "kolkata", "ahmedabad", "noida", "gurgaon", "gurugram",
-    "jaipur", "trichy", "tiruchirappalli", "coimbatore", "kochi", "remote",
-    "dubai", "abu dhabi", "singapore", "london", "new york", "san francisco",
-    "berlin", "toronto", "sydney",
+    "bangalore", "bengaluru", "mumbai", "navi mumbai", "delhi", "new delhi",
+    "hyderabad", "secunderabad", "chennai", "pune", "kolkata", "ahmedabad",
+    "noida", "greater noida", "gurgaon", "gurugram", "jaipur", "trichy",
+    "tiruchirappalli", "tiruchirapalli", "coimbatore", "kochi", "cochin",
+    "thiruvananthapuram", "trivandrum", "madurai", "salem", "vellore", "erode",
+    "tirupati", "vijayawada", "visakhapatnam", "vizag", "nagpur", "indore",
+    "bhopal", "lucknow", "kanpur", "chandigarh", "mohali", "mysore", "mysuru",
+    "mangalore", "nashik", "surat", "vadodara", "rajkot", "bhubaneswar",
+    "guwahati", "ranchi", "patna", "raipur", "dehradun", "remote",
+    # global hubs
+    "dubai", "abu dhabi", "sharjah", "singapore", "london", "manchester",
+    "new york", "san francisco", "bay area", "seattle", "austin", "boston",
+    "berlin", "munich", "amsterdam", "dublin", "toronto", "vancouver",
+    "sydney", "melbourne", "tokyo", "hong kong",
 ]
+
+# Indian states / union territories (used as a secondary signal + comma patterns).
+INDIAN_STATES = [
+    "tamil nadu", "karnataka", "kerala", "andhra pradesh", "telangana",
+    "maharashtra", "gujarat", "rajasthan", "uttar pradesh", "madhya pradesh",
+    "west bengal", "bihar", "punjab", "haryana", "delhi", "odisha", "assam",
+    "jharkhand", "chhattisgarh", "uttarakhand", "goa", "himachal pradesh",
+]
+COUNTRIES = ["india", "united states", "usa", "united kingdom", "uk", "uae",
+             "united arab emirates", "singapore", "canada", "australia", "germany"]
+
+# A "City, Region[, Country]" phrase, e.g. "Tiruchirappalli, Tamil Nadu, India".
+_CITY_REGION_RE = re.compile(
+    r"\b([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?),\s*"
+    r"([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+){0,2})(?:,\s*([A-Z][a-zA-Z]+))?")
 
 
 def _extract_text(file_path: str) -> str:
     parts = []
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
-            parts.append(page.extract_text() or "")
+            # x_tolerance=1 (vs pdfplumber's default 3): many resume PDFs lay words
+            # out with small inter-word gaps that the default merges into one token
+            # ("Webscrapedmostfavoured…"). A tolerance of 1 detects those word
+            # boundaries without splitting inside words (intra-letter gaps are ~0).
+            parts.append(page.extract_text(x_tolerance=1) or "")
     return "\n".join(parts)
 
 
@@ -94,10 +122,36 @@ def _guess_name(text: str, email: str) -> str:
 
 
 def _guess_location(text: str) -> str:
+    """Best-effort location extraction. Order of preference:
+    1. A known city name anywhere (most reliable single signal).
+    2. A "City, Region[, Country]" phrase in the contact/header area, where the
+       region is a known Indian state or country (avoids matching random
+       "Word, Word" pairs like project or company names).
+    3. A known state or country name as a last resort.
+    """
     low = text.lower()
+
+    # 1. Known city — return it with the surrounding region if it reads as "City, X".
     for hint in LOCATION_HINTS:
         if re.search(r"\b" + re.escape(hint) + r"\b", low):
+            m = re.search(re.escape(hint) + r",\s*([A-Za-z][A-Za-z ]+)", low)
+            region = (m.group(1).strip().title() if m else "")
+            if region and (region.lower() in INDIAN_STATES or region.lower() in COUNTRIES):
+                return f"{hint.title()}, {region}"
             return hint.title()
+
+    # 2. "City, Region[, Country]" header phrase validated by a known state/country.
+    header = "\n".join(text.splitlines()[:15])
+    for m in _CITY_REGION_RE.finditer(header):
+        city, region, country = m.group(1), m.group(2), (m.group(3) or "")
+        if region.lower() in INDIAN_STATES or region.lower() in COUNTRIES:
+            tail = f", {country}" if country else ""
+            return f"{city}, {region}{tail}".strip()
+
+    # 3. Bare state / country as a last resort.
+    for region in INDIAN_STATES + COUNTRIES:
+        if re.search(r"\b" + re.escape(region) + r"\b", low):
+            return region.title()
     return ""
 
 

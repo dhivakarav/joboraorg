@@ -36,10 +36,14 @@ def ensure_sqlite_columns():
         "applications": {
             "application_id": "VARCHAR DEFAULT ''",
             "evidence_available": "BOOLEAN DEFAULT 0",
+            "application_mode": "VARCHAR DEFAULT 'manual_link_provided'",
         },
         "users": {
             "plan": "VARCHAR DEFAULT 'free'",
             "plan_since": "DATETIME",
+        },
+        "job_filters": {
+            "min_match_score": "INTEGER DEFAULT 50",
         },
     }
     insp = inspect(engine)

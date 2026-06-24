@@ -192,6 +192,15 @@ class Settings:
     JOB_CACHE_TTL: int = int(os.getenv("JOB_CACHE_TTL", "900"))        # 15 min
     PROVIDER_TIMEOUT: float = float(os.getenv("PROVIDER_TIMEOUT", "15"))
     PROVIDER_MIN_INTERVAL: float = float(os.getenv("PROVIDER_MIN_INTERVAL", "1.0"))
+    # Hard wall-clock budget for a whole search across all providers. Slow/hanging
+    # providers that don't finish in time are dropped from THIS search (graceful
+    # degradation) so the request always returns well within client/proxy socket
+    # timeouts — instead of hanging ~15s and getting the socket closed underneath us.
+    SEARCH_DEADLINE_SECONDS: float = float(os.getenv("SEARCH_DEADLINE_SECONDS", "12"))
+    # How big a raw pool each search pulls from the providers (before dedupe/filter/
+    # display-trim). Decoupled from the UI display limit so we never leave free-tier
+    # API volume on the table; providers still cap themselves at their pagination max.
+    PROVIDER_FETCH_BUDGET: int = int(os.getenv("PROVIDER_FETCH_BUDGET", "200"))
     # Optional provider API keys (providers stay disabled until set).
     ADZUNA_APP_ID: str = os.getenv("ADZUNA_APP_ID", "")
     ADZUNA_APP_KEY: str = os.getenv("ADZUNA_APP_KEY", "")

@@ -9,15 +9,22 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_approved_user
-from ..models import Application, User
+from ..models import Application, JobFilter, User
 from ..schemas import ApplicationOut, EvidenceOut, PaginatedApplications, StatusUpdateIn
+from ..status import USER_SETTABLE_STAGES as USER_SETTABLE
 
 router = APIRouter(prefix="/api/applications", tags=["applications"])
 
-# A user may only move a row between honest, non-submission lifecycle states.
-# Submission outcomes (Submitted / Verified Submitted / Failed) are system-derived
-# from real evidence and can NEVER be set by hand — and "Applied" is retired.
-USER_SETTABLE = {"Saved", "Tracked", "Skipped"}
+# The match-score floor only governs DISCOVERY output — the rows Start Applying
+# auto-generates: Matched Jobs ("Manual Apply") and the approval queue ("Pending
+# Approval"). User-curated rows (Tracked/Saved) and in-funnel rows (Interview/
+# Offer/Submitted/…) are never hidden by the slider — you can't lose a job you
+# saved or are interviewing for just because you raised the threshold.
+_FLOOR_APPLIES_TO = {"Manual Apply", "Pending Approval"}
+
+# USER_SETTABLE (imported above from status.py, single source of truth): the
+# stages a user may self-assign — automation never sets these, so an automated
+# "Applied"-style claim can't be fabricated.
 
 
 @router.get("", response_model=PaginatedApplications)
@@ -26,23 +33,41 @@ def list_applications(
     page_size: int = Query(20, ge=1, le=100),
     status: Optional[str] = None,
     portal: Optional[str] = None,
+    mode: Optional[str] = Query(None, description="filter by application_mode: auto_applied | manual_link_provided"),
+    sort: Optional[str] = Query(None, description="match_score to sort by match desc (default: recent first)"),
     user: User = Depends(get_approved_user),
     db: Session = Depends(get_db),
 ):
     q = db.query(Application).filter(Application.user_id == user.id)
     if portal:
         q = q.filter(Application.portal == portal)
-    q = q.order_by(Application.applied_at.desc())
+    if mode:
+        q = q.filter(Application.application_mode == mode)
+    if sort == "match_score":
+        q = q.order_by(Application.match_score.desc(), Application.applied_at.desc())
+    else:
+        q = q.order_by(Application.applied_at.desc())
+
+    # HARD MATCH-SCORE FLOOR (same threshold as Find Jobs): Matched Jobs and the
+    # Pending Approval queue must never show a row below the user's min_match_score.
+    # Rows the user has actively advanced into their human funnel are exempt so a
+    # raised slider never hides a job they're already interviewing for.
+    min_match = db.query(JobFilter.min_match_score).filter_by(user_id=user.id).scalar()
+    min_match = min_match if min_match is not None else 50
+
+    def _passes_floor(a) -> bool:
+        if not min_match:
+            return True
+        if a.display_status not in _FLOOR_APPLIES_TO:
+            return True          # user-curated / in-funnel rows are never floored
+        return (a.match_score or 0) >= min_match
 
     # `status` filters on the canonical display status (derived), so apply it in
-    # Python — it never matches the raw stored `status` column anymore.
-    if status:
-        rows = [a for a in q.all() if a.display_status == status]
-        total = len(rows)
-        items = rows[(page - 1) * page_size: page * page_size]
-    else:
-        total = q.count()
-        items = q.offset((page - 1) * page_size).limit(page_size).all()
+    # Python — it never matches the raw stored `status` column anymore. The match
+    # floor is also applied in Python so it composes with the derived-status filter.
+    rows = [a for a in q.all() if _passes_floor(a) and (not status or a.display_status == status)]
+    total = len(rows)
+    items = rows[(page - 1) * page_size: page * page_size]
     return PaginatedApplications(items=items, total=total, page=page, page_size=page_size)
 
 

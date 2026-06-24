@@ -86,11 +86,40 @@ async def _run_one(app_id: int):
 
 
 # ---------------------------------------------------------------- the job
-async def process_submission(app_id: int):
-    """Process one queued application: fill + submit + verify + persist."""
+async def _run_platform_submit(platform: str, app, payload: dict, answers: dict,
+                               profile: dict, evidence_dir: str):
+    """Dispatch to the right live submitter by platform. Returns an outcome object
+    exposing .submission_status, .application_id, .confirmation_url, .evidence_json()."""
+    if platform == "Internshala":
+        from .adapters.internshala_submit import apply as ish_apply
+        from .credentials import get_plaintext
+        cdb = SessionLocal()
+        try:
+            pair = get_plaintext(cdb, app.user_id, "Internshala")
+        finally:
+            cdb.close()
+        username, password = pair if pair else ("", "")
+        return await ish_apply(app.apply_url, profile, profile["resume_path"],
+                               answers, username, password, evidence_dir, tag="apply")
+
+    # default: Greenhouse
     from .adapters.greenhouse_fill import fetch_fields
     from .adapters.greenhouse_production import apply as gh_apply
     from .adapters.greenhouse_production import parse_board_job, resolve_form_url
+    job = {"external_id": payload.get("external_id", ""),
+           "apply_url": app.apply_url, "form_url": payload.get("form_url", "")}
+    form_url = resolve_form_url(job)
+    bj = parse_board_job(job)
+    try:
+        _, fields = fetch_fields(bj[0], bj[1]) if bj else ("", [])
+    except Exception:
+        fields = []
+    return await gh_apply(form_url, fields, profile, profile["resume_path"],
+                          answers, evidence_dir, tag="apply")
+
+
+async def process_submission(app_id: int):
+    """Process one queued application: fill + submit + verify + persist."""
     from .adapters.runtime import live_ready
     from .services import load_profile
     from .storage import storage
@@ -119,19 +148,10 @@ async def process_submission(app_id: int):
             db.commit()
             return
 
-        job = {"external_id": payload.get("external_id", ""),
-               "apply_url": app.apply_url, "form_url": payload.get("form_url", "")}
-        form_url = resolve_form_url(job)
         profile = load_profile(db, user)
-        bj = parse_board_job(job)
-        try:
-            _, fields = fetch_fields(bj[0], bj[1]) if bj else ("", [])
-        except Exception:
-            fields = []
-
         evidence_dir = str(settings.UPLOAD_DIR / "evidence" / str(app.id))
-        outcome = await gh_apply(form_url, fields, profile, profile["resume_path"],
-                                 answers, evidence_dir, tag="apply")
+        outcome = await _run_platform_submit(app.platform or "Greenhouse", app, payload,
+                                             answers, profile, evidence_dir)
 
         # Push evidence to storage (works for local + S3).
         ev = json.loads(outcome.evidence_json())

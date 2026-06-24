@@ -83,6 +83,8 @@ def _answer_for(f: GHField, profile: dict) -> Optional[str]:
         return profile["email"]
     if f.name == "phone":
         return profile["phone"]
+    if f.name in ("location", "job_application[location]") or "location" in f.name.lower():
+        return profile.get("location", "") or None
     if f.type in ("input_text", "textarea"):
         return profile.get("text_answer", "N/A")
     if "select" in f.type:

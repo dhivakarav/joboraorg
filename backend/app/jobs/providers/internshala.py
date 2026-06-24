@@ -35,6 +35,17 @@ FEED_URL = os.getenv("INTERNSHALA_FEED_URL", "")
 # to it; this flag lets an operator skip the robots gate for a non-internshala
 # host they're licensed to use. Defaults to enforcing the gate.
 SKIP_ROBOTS = os.getenv("INTERNSHALA_FEED_TRUSTED", "0") == "1"
+# Operator ASSERTS this feed is a genuine licensed/official/partner source (not
+# the local dev mock). Only an authorized feed unlocks real Internshala discovery
+# + apply in the UI; otherwise the provider is treated as Mock Mode.
+FEED_AUTHORIZED = os.getenv("INTERNSHALA_FEED_AUTHORIZED", "0") == "1"
+
+# Hosts we consider to be the local development MOCK (never a real source).
+_MOCK_HOSTS = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+
+# Set once a real authorized feed has returned at least one record this process
+# (distinguishes "Authorized Feed Available" from "Connected").
+_LAST_FETCH_OK = False
 
 
 class InternshalaProvider(Provider):
@@ -44,6 +55,43 @@ class InternshalaProvider(Provider):
 
     def available(self) -> bool:
         return bool(FEED_URL)
+
+    @staticmethod
+    def _is_mock_feed() -> bool:
+        if not FEED_URL:
+            return False
+        host = (urlparse(FEED_URL).netloc.split(":")[0] or "").lower()
+        return host in _MOCK_HOSTS or "mock" in FEED_URL.lower()
+
+    def authorized(self) -> bool:
+        """True only for a genuine licensed/official feed (not disabled, not mock)."""
+        return bool(FEED_URL) and FEED_AUTHORIZED and not self._is_mock_feed()
+
+    def status(self) -> str:
+        """One of: Disabled | Mock Mode | Authorized Feed Available | Connected."""
+        if not FEED_URL:
+            return "Disabled"
+        if not self.authorized():
+            return "Mock Mode"
+        return "Connected" if _LAST_FETCH_OK else "Authorized Feed Available"
+
+    def status_message(self) -> str:
+        # The honest "what it does instead" line: even with no direct feed, real
+        # Internshala listings still surface when a licensed aggregator (JSearch)
+        # returns one whose apply_url points to internshala.com — no fake links.
+        _via_aggregator = (" Real Internshala listings still appear when a licensed "
+                           "aggregator (JSearch) returns one — never as a fabricated link.")
+        return {
+            "Disabled": ("Internshala discovery is off — no data source configured. "
+                         "Internshala has no public API and its robots.txt disallows "
+                         "search/detail scraping." + _via_aggregator),
+            "Mock Mode": ("Internshala is running on a LOCAL MOCK feed (sample data, not "
+                          "real listings) — this sample data is NEVER shown in real search "
+                          "results." + _via_aggregator),
+            "Authorized Feed Available": ("An authorized Internshala feed is configured; "
+                                          "awaiting the first successful fetch."),
+            "Connected": "Connected to an authorized Internshala feed.",
+        }[self.status()]
 
     def unavailable_reason(self) -> str:
         if not FEED_URL:
@@ -110,9 +158,10 @@ class InternshalaProvider(Provider):
         if not FEED_URL:
             return []                                  # disabled — no authorized source
         # Defense-in-depth: NEVER fetch internshala.com HTML directly (robots
-        # disallows it + the urllib gate fails open). A real licensed feed lives on
-        # a partner host, or on an internshala endpoint the operator explicitly
-        # trusts (INTERNSHALA_FEED_TRUSTED=1). Otherwise refuse.
+        # disallows it). A real licensed feed lives on a partner host, or on an
+        # internshala endpoint the operator explicitly trusts
+        # (INTERNSHALA_FEED_TRUSTED=1). Otherwise refuse. The robots gate now
+        # fails CLOSED (see app/jobs/robots.py), so it is a real second line.
         host = urlparse(FEED_URL).netloc.lower()
         if (host == "internshala.com" or host.endswith(".internshala.com")) and not SKIP_ROBOTS:
             return []
@@ -133,4 +182,8 @@ class InternshalaProvider(Provider):
                     out.append(job)
             except Exception:
                 continue
+        # Mark "Connected" once a genuine authorized feed has yielded records.
+        if out and self.authorized():
+            global _LAST_FETCH_OK
+            _LAST_FETCH_OK = True
         return out

@@ -3,7 +3,7 @@ import { api } from "../../api/client";
 import { Spinner, PillInput, useToast } from "../../components/UI";
 
 const LOCATIONS = ["India", "Dubai", "Singapore"];
-const JOB_TYPES = ["Full-time", "Part-time", "Remote", "Contract"];
+const JOB_TYPES = ["Full-time", "Internships", "Part-time", "Remote", "Contract"];
 
 export default function Filters() {
   const toast = useToast();
@@ -32,8 +32,8 @@ export default function Filters() {
         locations: f.locations,
         job_types: f.job_types,
         keywords: f.keywords,
-        min_salary: Number(f.min_salary),
         daily_limit: Number(f.daily_limit),
+        min_match_score: Number(f.min_match_score ?? 50),
       });
       toast("Filters saved", "success");
     } catch (e) {
@@ -101,25 +101,6 @@ export default function Filters() {
 
         <div>
           <label className="label">
-            Minimum salary — <span className="text-white">${Number(f.min_salary).toLocaleString()}/month</span>
-          </label>
-          <input
-            type="range"
-            min="500"
-            max="10000"
-            step="100"
-            value={f.min_salary}
-            onChange={(e) => set("min_salary", e.target.value)}
-            className="w-full accent-white"
-          />
-          <div className="flex justify-between text-xs text-muted mt-1">
-            <span>$500</span>
-            <span>$10,000</span>
-          </div>
-        </div>
-
-        <div>
-          <label className="label">
             Daily application limit — <span className="text-white">{f.daily_limit}/day</span>
           </label>
           <input
@@ -135,6 +116,28 @@ export default function Filters() {
             <span>5</span>
             <span>100</span>
           </div>
+        </div>
+
+        <div>
+          <label className="label">
+            Minimum resume match score — <span className="text-white">{f.min_match_score ?? 50}%</span>
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={f.min_match_score ?? 50}
+            onChange={(e) => set("min_match_score", e.target.value)}
+            className="w-full accent-white"
+          />
+          <div className="flex justify-between text-xs text-muted mt-1">
+            <span>0% (show all)</span>
+            <span>100% (exact)</span>
+          </div>
+          <p className="text-xs text-muted mt-1">
+            Jobs scoring below this against your resume are hidden in Find Jobs &amp; Matched Jobs.
+          </p>
         </div>
 
         <div className="pt-2">

@@ -116,6 +116,28 @@ def india_tier(location: str, remote: bool = False) -> int:
     return TIER_GLOBAL
 
 
+def india_internship_tier(location: str, remote: bool = False,
+                          employment_type: str = "", early: bool = False) -> int:
+    """Early-career-aware India ranking (lower = better). Used to maximise India
+    internship/fresher coverage at the top of results:
+
+      1  India internship / fresher / new-grad   (on-site)   ← Tier 1
+      2  Remote-India internship / fresher                   ← Tier 2
+      3  India (any other role)
+      4  Global remote                                       ← Tier 3
+      5  Everything else (global on-site)
+    """
+    is_india = _is_india(location)
+    is_early = early or (employment_type or "").lower() in ("internship", "fresher")
+    if is_india and is_early:
+        return 2 if remote else 1
+    if is_india:
+        return 3
+    if remote:
+        return 4
+    return 5
+
+
 def company_match(company: str, wanted: str) -> bool:
     """Case-insensitive substring company filter (empty filter = match all)."""
     if not wanted:

@@ -13,8 +13,10 @@ uploads/
 frontend/node_modules/
 frontend/dist/
 
-# Env
+# Env — never commit real secrets/API keys
 .env
+**/.env
+backend/.env
 *.local
 
 # OS / editor

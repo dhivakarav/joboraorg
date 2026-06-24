@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
-import { JobCardSkeleton, Tooltip, useToast } from "../../components/UI";
+import { ApplyModeBadge, JobCardSkeleton, Tooltip, useToast } from "../../components/UI";
 import { useAuth } from "../../context/AuthContext";
 import AssistedApplyWizard from "../../components/AssistedApplyWizard";
 import GreenhouseSubmitWizard from "../../components/GreenhouseSubmitWizard";
 
-// Captcha-gated portals use the Assisted Apply wizard; others use the review modal.
+// Auto-Apply sources whose forms are captcha-gated, so they fall back to the
+// Assisted Apply wizard: Jobora prefills, the user finishes + submits on the real
+// portal, then records proof. (Internshala is NOT here — it's link-only with no
+// public API, so there's no auto-apply attempt to fall back from; it just deep-
+// links to Internshala's own search for the user to apply themselves.)
 const ASSISTED_PLATFORMS = ["Lever", "Ashby"];
+
 
 // India-first location list — major hiring hubs for students/freshers.
 const LOCATIONS = [
@@ -45,14 +50,6 @@ const TABS = [
 // Personalize the default tab from the onboarding seeker type.
 const SEEKER_DEFAULT_TAB = { student: "internship", fresher: "fresher", experienced: "job" };
 
-// Sources whose discovery awaits an authorized data source (shown as "Source Pending").
-const PENDING_SOURCES = {
-  Internshala: "Internshala integration is awaiting an authorized data source.",
-  Workable: "Workable discovery needs an authorized account token.",
-  Wellfound: "Wellfound discovery is awaiting an authorized data source (no public API).",
-  JSearch: "JSearch (Google for Jobs) needs a free RapidAPI key to enable broad India + remote + internship coverage.",
-};
-
 export default function FindJobs() {
   const toast = useToast();
   const { user } = useAuth();
@@ -69,6 +66,15 @@ export default function FindJobs() {
   const [duration, setDuration] = useState("");
 
   async function openApply(j) {
+    // Internshala is link-only (no public API). Open Internshala's own search
+    // results (or the listing) for the user to browse/apply themselves — never an
+    // auto/assisted submit. Prefer the "Search on Internshala" deep-link.
+    if (j.platform === "Internshala") {
+      const url = data?.internshala_search?.search_url || j.apply_url;
+      if (url) window.open(url, "_blank", "noopener");
+      else toast("No Internshala link available for this search.", "error");
+      return;
+    }
     // Assisted (captcha-gated) portals use the wizard.
     if (ASSISTED_PLATFORMS.includes(j.platform)) { setAssistJob(j); return; }
     // Greenhouse → submit wizard (real submission behind a per-application
@@ -94,10 +100,12 @@ export default function FindJobs() {
   // null = let the server default it from the profile; then we sync the checkbox.
   const [internshipsOnly, setInternshipsOnly] = useState(null);
 
+  // Search ALWAYS spans every connected source — there is no source filter. The
+  // backend aggregates across all enabled providers + manual-link portals.
   async function load(activeTab = tab, refresh = false, ineligible = showIneligible, io = internshipsOnly) {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: 40 });
+      const params = new URLSearchParams({ limit: 150 });
       if (q) params.set("q", q);
       const tabFilter = TABS.find((t) => t.key === activeTab)?.filter || {};
       // Location dropdown takes precedence over any tab-provided location, so the
@@ -237,27 +245,19 @@ export default function FindJobs() {
         </Tooltip>
       </label>
 
-      {/* Sources — Source Pending badge + tooltip for unavailable providers */}
-      {data?.sources && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted">Sources:</span>
-          {data.sources.map((s) => {
-            if (PENDING_SOURCES[s.name] && !s.available) {
-              return (
-                <Tooltip key={s.name} text={PENDING_SOURCES[s.name]}>
-                  <span className="badge border-yellow-500/40 text-yellow-400 cursor-help">
-                    ⏳ {s.name} · Source Pending
-                  </span>
-                </Tooltip>
-              );
-            }
-            return (
-              <span key={s.name}
-                    className={`badge ${s.available ? "border-success/40 text-success" : "border-line text-muted"}`}>
-                {s.available ? "●" : "○"} {s.name}
-              </span>
-            );
-          })}
+      {/* Search on Internshala — a direct deep-link to Internshala's OWN search
+          results for the user's query (India + intern/fresher contexts). Always
+          available: it's a constructed URL, never a fetched/scraped listing. */}
+      {data?.internshala_search?.search_url && (
+        <div className="card p-3 flex items-center justify-between gap-3 border-blue-400/30">
+          <div className="text-sm">
+            <span className="font-medium text-blue-300">Search on Internshala</span>
+            <span className="text-muted">{" — "}{data.internshala_search.note}</span>
+          </div>
+          <a href={data.internshala_search.search_url} target="_blank" rel="noopener noreferrer"
+             className="btn-ghost whitespace-nowrap text-blue-300 border-blue-400/40">
+            Search on Internshala ↗
+          </a>
         </div>
       )}
 
@@ -418,6 +418,16 @@ function SignalBadge({ job }) {
   );
 }
 
+// Where the user actually completes the application (derived from the apply URL).
+function applySourceLabel(url) {
+  const u = (url || "").toLowerCase();
+  if (u.includes("internshala")) return "Apply on Internshala";
+  if (u.includes("naukri")) return "Apply on Naukri";
+  if (u.includes("foundit") || u.includes("monster")) return "Apply on Foundit";
+  if (u.includes("unstop")) return "Apply on Unstop";
+  return "Apply on Company Site";
+}
+
 function JobCard({ job, onApply }) {
   return (
     <div className="card-elevated p-5 flex flex-col">
@@ -458,19 +468,26 @@ function JobCard({ job, onApply }) {
         </ul>
       </div>
 
-      <div className="mt-auto pt-4 flex items-center gap-2 border-t border-line mt-4">
+      <div className="mt-auto pt-4 flex items-center gap-2 flex-wrap border-t border-line mt-4">
         {job.verified && <span className="badge border-line text-muted">✓ Verified listing</span>}
+        {/* Hybrid apply-mode badge — Auto-Applied (ATS) vs Apply Manually. */}
+        <ApplyModeBadge mode={job.application_mode} />
+        {/* Apply Source badge — where the application is actually completed. */}
+        <span className="badge border-indigo-400/40 text-indigo-300">{applySourceLabel(job.apply_url)}</span>
+        {/* Lever/Ashby are Auto-Apply sources that fall back to Assisted Apply
+            (captcha-gated). Internshala is NOT auto-apply — it's link-only
+            (manual_link_provided), so it just shows "Apply Manually" via the
+            ApplyModeBadge above, like Naukri/Indeed/etc. */}
         {ASSISTED_PLATFORMS.includes(job.platform) ? (
           <span className="badge border-blue-400/40 text-blue-300">Assisted Apply</span>
-        ) : (
-          <span className="badge border-line text-muted">Apply on company site</span>
-        )}
+        ) : null}
         <div className="ml-auto">
           {job.applied ? (
             <span className="badge border-success/40 text-success">✓ Tracked</span>
           ) : (
             <button className="btn-primary" onClick={onApply}>
-              {ASSISTED_PLATFORMS.includes(job.platform) ? "Assisted Apply" : "Track & Apply"}
+              {job.platform === "Internshala" ? "Search on Internshala"
+                : ASSISTED_PLATFORMS.includes(job.platform) ? "Assisted Apply" : "Track & Apply"}
             </button>
           )}
         </div>

@@ -108,3 +108,29 @@ def test_greenhouse_apply_valid_enqueues(client, gh_token, monkeypatch):
     assert body["submission_status"] == "Queued"
     assert body["queue_backend"] == "test-queue"
     assert isinstance(body["application_id"], int)
+
+
+# --- regression: company-careers-domain gh_jid URLs resolve to the embed form,
+#     and a truly unmappable URL yields None (caller fails safe, never crashes goto).
+def test_resolve_form_url_from_company_domain_gh_jid():
+    from app.adapters.greenhouse_production import resolve_form_url
+    # Coinbase / Druva apply pages live on the company's own domain with ?gh_jid=.
+    assert resolve_form_url({"apply_url": "https://www.coinbase.com/careers/positions/7558051?gh_jid=7558051"}) \
+        == "https://boards.greenhouse.io/embed/job_app?token=7558051"
+    assert resolve_form_url({"apply_url": "https://www.druva.com/careers/jobs/8207141002/?gh_jid=8207141002"}) \
+        == "https://boards.greenhouse.io/embed/job_app?token=8207141002"
+
+
+def test_resolve_form_url_none_for_unmappable():
+    from app.adapters.greenhouse_production import resolve_form_url
+    # No gh_jid, not a greenhouse domain → None (apply() then fails safe as Manual).
+    assert resolve_form_url({"apply_url": "https://acme.example.com/careers/apply"}) is None
+
+
+def test_apply_guard_no_crash_on_empty_form_url():
+    import asyncio
+    from app.adapters.greenhouse_production import apply, S_MANUAL
+    out = asyncio.run(apply("", [], {"name": "A B", "email": "a@b.co", "phone": "1"},
+                            "", {}, "/tmp", tag="apply"))
+    assert out.submission_status == S_MANUAL          # graceful, not an exception
+    assert "form" in (out.failure_reason or "").lower()

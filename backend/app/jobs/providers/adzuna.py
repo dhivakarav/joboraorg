@@ -18,7 +18,17 @@ from ..base import Provider, RawJob, infer_employment_type
 COUNTRY_BY_LOCATION = {
     "india": "in", "singapore": "sg",
 }
-ENDPOINT = "https://api.adzuna.com/v1/api/jobs/{country}/search/1"
+# {page} is the 1-based page index — Adzuna paginates via the path, not a param.
+ENDPOINT = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
+
+# Adzuna free tier allows up to 50 results/page. We loop pages until the API runs
+# out (or the per-search page cap) so the user gets the MAX real volume the free
+# tier provides — bounded by ADZUNA_MAX_PAGES so a single search never hammers the
+# quota (250 calls/day on the free plan). Each page = 1 API call per country.
+RESULTS_PER_PAGE = 50
+MAX_PAGES = int(os.getenv("ADZUNA_MAX_PAGES", "5"))      # 5 pages × 50 = 250/country
+# Small pause between page calls so we stay well under Adzuna's per-minute limit.
+PAGE_PAUSE_SEC = float(os.getenv("ADZUNA_PAGE_PAUSE", "0.25"))
 
 # Adzuna has no explicit remote flag — infer it from the text.
 _REMOTE_RE = re.compile(r"\bremote\b|work from home|\bwfh\b|hybrid", re.I)
@@ -27,6 +37,7 @@ _REMOTE_RE = re.compile(r"\bremote\b|work from home|\bwfh\b|hybrid", re.I)
 class AdzunaProvider(Provider):
     name = "Adzuna"
     requires_key = True
+    supports_recent = True   # fetch() accepts recent= to sort newest-first (Refresh)
 
     def __init__(self):
         self.app_id = os.getenv("ADZUNA_APP_ID", "")
@@ -35,22 +46,41 @@ class AdzunaProvider(Provider):
     def available(self) -> bool:
         return bool(self.app_id and self.app_key)
 
-    async def _fetch_country(self, client, country: str, query: str, limit: int) -> List[RawJob]:
-        params = {
-            "app_id": self.app_id,
-            "app_key": self.app_key,
-            "results_per_page": min(limit, 50),
-            "content-type": "application/json",
-        }
-        if query:
-            params["what"] = query
-        try:
-            r = await client.get(ENDPOINT.format(country=country), params=params)
-            r.raise_for_status()
-        except Exception:
-            return []
+    async def _fetch_country(self, client, country: str, query: str, limit: int,
+                             recent_first: bool = False) -> List[RawJob]:
+        """Pull as many pages as the free tier allows, until Adzuna returns a short
+        (last) page or we hit the per-search page cap or the caller's limit."""
         out: List[RawJob] = []
-        for j in r.json().get("results", []):
+        # How many pages we actually need to satisfy `limit` (still bounded by MAX_PAGES).
+        pages_needed = max(1, min(MAX_PAGES, (limit + RESULTS_PER_PAGE - 1) // RESULTS_PER_PAGE))
+        for page in range(1, pages_needed + 1):
+            params = {
+                "app_id": self.app_id,
+                "app_key": self.app_key,
+                "results_per_page": RESULTS_PER_PAGE,
+                "content-type": "application/json",
+            }
+            if query:
+                params["what"] = query
+            if recent_first:
+                params["sort_by"] = "date"   # Refresh wants the newest postings first
+            try:
+                r = await client.get(ENDPOINT.format(country=country, page=page), params=params)
+                r.raise_for_status()
+                results = r.json().get("results", [])
+            except Exception:
+                break   # stop paginating this country on error; keep what we have
+            out.extend(self._parse_results(results, country))
+            if len(results) < RESULTS_PER_PAGE:
+                break   # last page reached — Adzuna has nothing more
+            if len(out) >= limit:
+                break
+            await asyncio.sleep(PAGE_PAUSE_SEC)
+        return out
+
+    def _parse_results(self, results: list, country: str) -> List[RawJob]:
+        out: List[RawJob] = []
+        for j in results:
             title = j.get("title", "") or ""
             desc = j.get("description", "") or ""
             loc = (j.get("location") or {}).get("display_name", "") or ""
@@ -84,12 +114,21 @@ class AdzunaProvider(Provider):
             ))
         return out
 
-    async def fetch(self, client, query: str, location: str, limit: int) -> List[RawJob]:
-        # Pick countries from the requested location, else default to in + sg.
+    async def fetch(self, client, query: str, location: str, limit: int,
+                    recent: bool = False) -> List[RawJob]:
+        # Map the requested location to an Adzuna country. If a SPECIFIC location
+        # was given that Adzuna doesn't cover (e.g. Dubai/UAE — Adzuna has no UAE
+        # country), return nothing rather than silently serving India/Singapore
+        # jobs as if they were that location. Only when NO location is given do we
+        # default to the India-first set (in + sg).
         loc = (location or "").lower()
-        countries = [c for name, c in COUNTRY_BY_LOCATION.items() if name in loc] or ["in", "sg"]
+        mapped = [c for name, c in COUNTRY_BY_LOCATION.items() if name in loc]
+        if loc and not mapped:
+            return []   # location specified but unsupported by Adzuna
+        countries = mapped or ["in", "sg"]
         results = await asyncio.gather(
-            *[self._fetch_country(client, c, query, limit) for c in set(countries)],
+            *[self._fetch_country(client, c, query, limit, recent_first=recent)
+              for c in set(countries)],
             return_exceptions=True,
         )
         jobs: List[RawJob] = []

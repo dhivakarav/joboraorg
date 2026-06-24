@@ -19,7 +19,8 @@ from typing import Dict
 from ..adapters import adapter_for
 from ..database import SessionLocal
 from ..jobs import aggregator
-from ..jobs.matching import score_job
+from ..jobs.base import is_specific_job_url
+from .matcher import score_job   # single resume↔job match engine
 from ..models import Application, JobFilter, Resume, User
 
 _tasks: Dict[int, asyncio.Task] = {}
@@ -53,6 +54,9 @@ def _load_context(user_id: int) -> dict:
         keywords = json.loads(filt.keywords) if filt and filt.keywords else []
         locations = json.loads(filt.locations) if filt and filt.locations else []
         daily_limit = filt.daily_limit if filt else 20
+        # Same resume match-score floor used by Find Jobs / Matched Jobs — one
+        # threshold, respected everywhere (default 50 when unset).
+        min_match = filt.min_match_score if (filt and filt.min_match_score is not None) else 50
         query = " ".join(roles[:3]) or (user.job_title if user else "") or "software engineer"
         location = locations[0] if locations else ""
 
@@ -81,7 +85,8 @@ def _load_context(user_id: int) -> dict:
         }
         return {
             "query": query, "location": location, "keywords": keywords,
-            "daily_limit": daily_limit, "applied_today": applied_today,
+            "daily_limit": daily_limit, "min_match": min_match,
+            "applied_today": applied_today,
             "existing": existing, "profile": profile, "resume_path": resume_path,
         }
     finally:
@@ -89,21 +94,50 @@ def _load_context(user_id: int) -> dict:
 
 
 # Map an engine outcome onto (internal lifecycle, canonical submission_status).
-# This path NEVER captures confirmation evidence, so it can never be "Verified
-# Submitted" and never writes the retired "Applied" label.
+# A real auto-submit now CAN capture confirmation evidence (screenshot + id +
+# confirmation URL); when all three are present the row graduates to "Verified
+# Submitted". The retired "Applied" label is never written.
 _CANON = {
-    "Submitted":    ("Submitted", "Submitted"),     # attempted (no evidence here)
+    "Pending Approval": ("Pending", "Pending Approval"),  # awaiting user confirm — NOT submitted
+    "Submitted":    ("Submitted", "Submitted"),     # attempted (evidence may upgrade it)
     "Manual Apply": ("Pending",   "Manual Apply"),
     "Failed":       ("Pending",   "Failed"),
     "Tracked":      ("Tracked",   "Draft"),
 }
 
 
-def _record(user_id: int, job: dict, adapter, status: str, match: int):
+def _store_evidence(app, result: dict):
+    """Persist post-submit evidence (screenshot + id + confirmation URL) onto the
+    application and upgrade it to Verified Submitted when all three exist."""
+    import json
+    from ..storage import storage
+    ev = {}
+    shot = (result or {}).get("screenshot_path")
+    if shot:
+        try:
+            key = f"evidence/{app.id}/screenshot_{datetime.utcnow().timestamp():.0f}.png"
+            storage.save_file(key, shot)
+            ev["screenshot_key"] = key
+        except Exception:
+            pass
+    app.application_id = (result or {}).get("application_id", "") or ""
+    app.external_application_id = app.application_id
+    app.confirmation_url = (result or {}).get("confirmation_url", "") or ""
+    if result and result.get("platform_response"):
+        ev["platform_response"] = result["platform_response"][:1500]
+    app.submission_evidence = json.dumps(ev)
+    app.evidence_available = bool(ev.get("screenshot_key"))
+    # INTEGRITY GATE: Verified requires id + confirmation_url + a stored artifact.
+    if app.application_id and app.confirmation_url and app.evidence_available:
+        app.submission_status = "Verified Submitted"
+        app.submitted_at = datetime.utcnow()
+
+
+def _record(user_id: int, job: dict, adapter, status: str, match: int, result: dict = None):
     lifecycle, sub = _CANON.get(status, ("Tracked", "Draft"))
     db = SessionLocal()
     try:
-        db.add(Application(
+        app = Application(
             user_id=user_id,
             portal=job["source"],
             source=job["source"],
@@ -120,8 +154,23 @@ def _record(user_id: int, job: dict, adapter, status: str, match: int):
             job_url_hash=job["fingerprint"],
             status=lifecycle,
             submission_status=sub,
-        ))
+        )
+        db.add(app)
+        db.flush()   # assign app.id for the evidence key
+        if status == "Submitted" and result:
+            _store_evidence(app, result)
         db.commit()
+        return app.submission_status
+    finally:
+        db.close()
+
+
+def _pending_count(user_id: int) -> int:
+    """How many jobs are currently waiting for the user's approval (all runs)."""
+    db = SessionLocal()
+    try:
+        return (db.query(Application)
+                .filter_by(user_id=user_id, submission_status="Pending Approval").count())
     finally:
         db.close()
 
@@ -140,8 +189,9 @@ async def _run(user_id: int):
         return
 
     await _emit(user_id, {"type": "start",
-                          "message": f"Scanning profile and auto-applying for “{ctx['query']}”"
-                                     + (f" in {ctx['location']}" if ctx["location"] else ""),
+                          "message": f"Scanning sources and matching jobs for “{ctx['query']}”"
+                                     + (f" in {ctx['location']}" if ctx["location"] else "")
+                                     + " — auto-apply jobs will be queued for your approval.",
                           "daily_limit": limit})
     try:
         await _emit(user_id, {"type": "portal", "message": "Discovering matching jobs…"})
@@ -156,39 +206,55 @@ async def _run(user_id: int):
                 if jobs:
                     break
 
-        # Best matches first.
+        # Score, then APPLY THE MATCH-SCORE THRESHOLD (same one Find Jobs / Matched
+        # Jobs use). Jobs below the user's min_match_score never enter the queue.
+        from ..jobs.eligibility import eligibility
+        min_match = ctx["min_match"]
         scored = [(score_job(j, profile)["score"], j) for j in jobs]
         scored.sort(key=lambda t: t[0], reverse=True)
+        before = len(scored)
+        scored = [(s, j) for s, j in scored if s >= min_match]
+        # ELIGIBILITY FILTER — same gate Find Jobs applies: never auto-queue roles
+        # flagged Not Recommended for this profile (senior / staff / principal / lead
+        # / manager / director / VP / architect / PhD-required / 3+ yrs). This is
+        # what stops senior-staff roles (e.g. Druva "Senior Staff Software Engineer")
+        # from being queued for auto-apply in the first place.
+        after_match = len(scored)
+        scored = [(s, j) for s, j in scored if eligibility(j, profile)["eligible"]]
+        skipped_ineligible = after_match - len(scored)
         await _emit(user_id, {"type": "info",
-                              "message": f"{len(scored)} matching openings found. Applying to top {limit}…"})
+                              "message": f"{before} openings found; {len(scored)} meet your "
+                                         f"{min_match}% match threshold and eligibility"
+                                         + (f" ({skipped_ineligible} senior/not-recommended "
+                                            f"role(s) skipped)" if skipped_ineligible else "")
+                                         + f". Reviewing top {limit}…"})
 
+        skipped_seen = 0   # met the threshold but already tracked from a previous run
+        new_pending = 0    # auto-capable (Greenhouse) → Pending Approval queue
+        new_manual = 0     # manual/assisted (Lever/Ashby/etc.) → Matched Jobs
         for match, job in scored:
             if applied >= limit:
                 break
             if job["fingerprint"] in seen:
+                skipped_seen += 1
+                continue
+            # Only surface rows that link to a SPECIFIC job page — never a generic
+            # search/listing/homepage URL.
+            if not is_specific_job_url(job.get("apply_url", "")):
                 continue
             seen.add(job["fingerprint"])
 
             adapter = adapter_for(job)
-            package = adapter.build_package(profile, job, ctx["resume_path"])
-            try:
-                result = await adapter.submit(package, {})
-            except Exception as exc:
-                await _emit(user_id, {"type": "log", "portal": adapter.platform,
-                                      "job_title": job["title"], "company": job["company"],
-                                      "location": job.get("location", ""), "status": "Failed",
-                                      "message": str(exc)})
-                _record(user_id, job, adapter, "Failed", match)
-                applied += 1
-                continue
-
-            if result.get("submitted"):
-                status = "Submitted"
-            elif result.get("manual_required"):
-                status = "Manual Apply"   # manual apply required
+            # SAFETY GATE: "Start Applying" NEVER auto-submits to a real company.
+            # Only auto-capable adapters (Greenhouse) are queued as "Pending Approval"
+            # for the user to review + confirm. Manual/assisted adapters (Lever,
+            # Ashby, Internshala, …) go to Matched Jobs — they never enter the queue.
+            if adapter.supports_auto_submit and not adapter.manual_only:
+                status = "Pending Approval"
+                new_pending += 1
             else:
-                status = "Tracked"        # prepared + approved (live disabled) — never "Applied"
-
+                status = "Manual Apply"
+                new_manual += 1
             _record(user_id, job, adapter, status, match)
             applied += 1
             await _emit(user_id, {
@@ -199,11 +265,32 @@ async def _run(user_id: int):
                 "status": status, "applied_today": applied,
                 "apply_url": job["apply_url"],
             })
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.1)
 
-        await _emit(user_id, {"type": "done", "applied_today": applied,
-                              "message": f"Done. Auto-applied to {applied} job(s). "
-                                         f"Review them in your Activity Log."})
+        # NOTE: we deliberately do NOT generate generic "[role] on Naukri/Unstop/…"
+        # search-link rows. Every surfaced row must point to a real, SPECIFIC job
+        # application page — manual-apply portals only appear when a licensed
+        # aggregator (JSearch/Adzuna) actually returned a specific listing whose
+        # apply_url is that portal (handled in the scored loop above).
+
+        # Count what's actually waiting for the user now (this run + earlier runs).
+        pending_total = _pending_count(user_id)
+        meet = len(scored)
+        if applied:
+            new_msg = (f"{applied} new match(es): {new_pending} auto-apply → Pending Approval, "
+                       f"{new_manual} manual → Matched Jobs"
+                       + (f"; {skipped_seen} already tracked from a previous run" if skipped_seen else ""))
+        elif meet:
+            new_msg = (f"{meet} job(s) meet your {min_match}% threshold, but 0 are new — "
+                       f"all {skipped_seen} were already tracked from a previous run")
+        else:
+            new_msg = f"no jobs met your {min_match}% match threshold"
+        await _emit(user_id, {
+            "type": "done", "applied_today": applied,
+            "message": (f"Done. {new_msg}. "
+                        f"You have {pending_total} job(s) awaiting approval. "
+                        f"Manual-apply matches (with real listing links) are in Matched Jobs. "
+                        f"Nothing was submitted to any company.")})
     except asyncio.CancelledError:
         await _emit(user_id, {"type": "done", "applied_today": applied, "message": "Stopped by user."})
         raise

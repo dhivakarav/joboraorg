@@ -24,6 +24,7 @@ def get_filters(user: User = Depends(get_approved_user), db: Session = Depends(g
         keywords=json.loads(filt.keywords or "[]"),
         min_salary=filt.min_salary,
         daily_limit=filt.daily_limit,
+        min_match_score=(filt.min_match_score if filt.min_match_score is not None else 50),
     )
 
 
@@ -43,5 +44,6 @@ def save_filters(
     filt.keywords = json.dumps(data.keywords)
     filt.min_salary = data.min_salary
     filt.daily_limit = data.daily_limit
+    filt.min_match_score = max(0, min(100, data.min_match_score))
     db.commit()
     return data

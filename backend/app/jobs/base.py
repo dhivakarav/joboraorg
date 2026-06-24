@@ -50,6 +50,7 @@ class RawJob:
     description_snippet: str = ""
     external_id: str = ""            # provider-native id (for stable dedupe)
     company_domain: str = ""         # host that should own the apply URL
+    source_domain: str = ""          # platform domain the apply URL lives on (derived if empty)
     employment_type: str = ""        # "internship" | "fresher" | "job" | ""
     duration: str = ""               # e.g. "3 months" (internships)
 
@@ -88,6 +89,16 @@ class RawJob:
                 return False
         return True
 
+    def _source_domain(self) -> str:
+        """Domain the apply URL lives on (e.g. boards.greenhouse.io, jobs.lever.co).
+        Falls back to the declared source_domain/company_domain, else ''."""
+        if self.source_domain:
+            return self.source_domain
+        host = (urlparse(self.apply_url).netloc or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        return host or self.company_domain
+
     def to_dict(self) -> dict:
         from .currency import salary_to_inr_sync  # local import avoids cycle
         salary = self.salary.strip()
@@ -95,6 +106,7 @@ class RawJob:
             "fingerprint": self.fingerprint,
             "external_id": self.external_id,
             "source": self.source,
+            "source_domain": self._source_domain(),
             "title": self.title.strip(),
             "company": self.company.strip(),
             "location": self.location.strip() or ("Remote" if self.remote else ""),
@@ -107,7 +119,9 @@ class RawJob:
             "employment_type": infer_employment_type(self.title, self.employment_type),
             "duration": self.duration,
             "apply_url": self.apply_url,
-            "description_snippet": _clean(self.description_snippet)[:280],
+            # Keep enough description text for the resume matcher to differentiate
+            # roles by their actual skill requirements (titles alone don't).
+            "description_snippet": _clean(self.description_snippet)[:600],
             "verified": self.verify(),
         }
 
@@ -127,12 +141,65 @@ class Provider:
         """Whether this provider is configured and usable."""
         return True
 
+    def status(self) -> str:
+        """Human-facing connection status for the sources UI.
+
+        Providers with richer lifecycles (e.g. Internshala: Mock Mode vs an
+        authorized feed) override this. Default: Connected when usable, else
+        Disabled.
+        """
+        return "Connected" if self.available() else "Disabled"
+
+    def status_message(self) -> str:
+        """Plain-language explanation of the current status, so the UI never shows
+        a dead source without saying why / what it does. Providers with a richer
+        lifecycle (Internshala, JSearch, Jooble) override this."""
+        if self.available():
+            return f"Connected to {self.name} (official public API)."
+        if self.requires_key:
+            return (f"{self.name} is off because it needs an API key/token. It surfaces "
+                    f"no jobs until configured — no fake listings are shown.")
+        return f"{self.name} is currently unavailable; it surfaces no jobs."
+
     async def fetch(self, client, query: str, location: str, limit: int) -> List[RawJob]:
         raise NotImplementedError
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
+
+# HARD markers of a generic search / results / homepage URL (never a real job).
+_SEARCH_URL_RE = re.compile(
+    r"(searchterm=|[?&]q=|[?&]query=|[?&]keywords=|/job-search/|/jobs/search|"
+    r"/srp/results)", re.I)
+
+# SOFT markers — SEO category slugs like "-jobs-in-dubai" or "/internships/".
+# These appear in BOTH category pages AND specific listings (job boards bake the
+# search phrase into the listing's slug). Treat as generic ONLY when no specific
+# job-id token is present.
+_SOFT_LISTING_RE = re.compile(
+    r"(-jobs-in-|/internships?/|/jobs-in-|-jobs(?:/|$|\?))", re.I)
+# A real listing carries a stable id: a long digit run, or jid-/jobid/-id tokens.
+_JOB_ID_RE = re.compile(r"(\d{5,}|jid[-_=]|job[_-]?id|/jobs?/\d+)", re.I)
+
+
+def is_specific_job_url(url: str) -> bool:
+    """True only if the URL points to a SPECIFIC job application page — not a
+    portal homepage, search results, or category-listing page. Used to ensure
+    every row a user sees has a real, clickable, specific apply link."""
+    if not url:
+        return False
+    p = urlparse(url)
+    host = (p.netloc or "").lower()
+    if not host or "localhost" in host or "127.0.0.1" in host:
+        return False                      # malformed or local mock URL
+    if not (p.path or "").rstrip("/"):
+        return False                      # bare domain / homepage
+    if _SEARCH_URL_RE.search(url):
+        return False                      # explicit search / results page
+    if _SOFT_LISTING_RE.search(url) and not _JOB_ID_RE.search(url):
+        return False                      # SEO category page with no job id
+    return True
 
 
 def _clean(text: str) -> str:

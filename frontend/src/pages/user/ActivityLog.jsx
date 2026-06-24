@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
-import { EvidenceCell, Spinner, StatusBadge, useToast } from "../../components/UI";
+import { ApplyModeBadge, EvidenceCell, Spinner, StatusBadge, useToast } from "../../components/UI";
 import EvidenceModal from "../../components/EvidenceModal";
 
-const SOURCES = ["Remotive", "Arbeitnow", "Greenhouse", "Lever", "Adzuna", "Jooble"];
-// Canonical, evidence-gated statuses (filter values). "Applied" is retired.
-const CANONICAL = ["Draft", "Tracked", "Manual Apply", "Submitted", "Verified Submitted", "Failed"];
+const SOURCES = ["Remotive", "Arbeitnow", "Greenhouse", "Lever", "Ashby", "SmartRecruiters",
+                 "TheMuse", "RemoteOK", "Jobicy", "Workable", "Wellfound", "JSearch",
+                 "Adzuna", "Jooble", "Internshala"];
+// Filterable statuses: evidence-gated submission outcomes + self-reported stages.
+const CANONICAL = ["Draft", "Tracked", "Manual Apply", "Pending Approval", "Queued",
+                   "Submitted", "Submitted (Unverified)", "Verified Submitted",
+                   "Failed", "Failed — No Confirmation", "Failed — Form Not Found",
+                   "Failed — Submit Not Found", "Interview", "Offer", "Rejected"];
+// Stages the user can set by hand (mirror of backend USER_SETTABLE).
+const USER_STAGES = ["Tracked", "Interview", "Offer", "Rejected", "Saved", "Skipped"];
 
 export default function ActivityLog() {
   const toast = useToast();
@@ -26,6 +33,16 @@ export default function ActivityLog() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, portal, status]);
+
+  async function setStage(appId, stage) {
+    try {
+      await api.patch(`/applications/${appId}/status`, { status: stage });
+      toast(`Marked as ${stage}`, "success");
+      load();
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
 
@@ -64,6 +81,8 @@ export default function ActivityLog() {
                   <th className="py-2 pr-3 font-medium">Match</th>
                   <th className="py-2 pr-3 font-medium">Salary (INR)</th>
                   <th className="py-2 pr-3 font-medium">Status</th>
+                  <th className="py-2 pr-3 font-medium">Mode</th>
+                  <th className="py-2 pr-3 font-medium">Stage</th>
                   <th className="py-2 pr-3 font-medium">Submission</th>
                   <th className="py-2 pr-3 font-medium">Evidence</th>
                 </tr>
@@ -79,6 +98,26 @@ export default function ActivityLog() {
                     <td className="py-2.5 pr-3 text-muted">{r.salary_inr || "—"}</td>
                     <td className="py-2.5 pr-3">
                       <StatusBadge status={r.display_status} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <div className="flex items-center gap-2">
+                        <ApplyModeBadge mode={r.application_mode} />
+                        {r.application_mode === "manual_link_provided" && r.apply_url && (
+                          <a href={r.apply_url} target="_blank" rel="noopener noreferrer"
+                             className="text-white underline underline-offset-2 hover:text-muted text-xs whitespace-nowrap">
+                            Open Job ↗
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <select className="input w-auto text-xs py-1"
+                              value={r.pipeline_stage || ""}
+                              onChange={(e) => e.target.value && setStage(r.id, e.target.value)}
+                              title="Set your pipeline stage (self-reported)">
+                        <option value="">— set stage</option>
+                        {USER_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
                     </td>
                     <td className="py-2.5 pr-3 text-muted text-xs">
                       {r.submission_status || "Draft"}

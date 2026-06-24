@@ -11,6 +11,7 @@ import ResetPassword from "./pages/ResetPassword";
 
 import Dashboard from "./pages/user/Dashboard";
 import FindJobs from "./pages/user/FindJobs";
+import MatchedJobs from "./pages/user/MatchedJobs";
 import Resume from "./pages/user/Resume";
 import Filters from "./pages/user/Filters";
 import ActivityLog from "./pages/user/ActivityLog";
@@ -66,6 +67,7 @@ export default function App() {
       {/* User portal */}
       <Route path="/app/dashboard" element={<RequireUser><Dashboard /></RequireUser>} />
       <Route path="/app/jobs" element={<RequireUser><FindJobs /></RequireUser>} />
+      <Route path="/app/matched" element={<RequireUser><MatchedJobs /></RequireUser>} />
       <Route path="/app/resume" element={<RequireUser><Resume /></RequireUser>} />
       <Route path="/app/filters" element={<RequireUser><Filters /></RequireUser>} />
       <Route path="/app/activity" element={<RequireUser><ActivityLog /></RequireUser>} />

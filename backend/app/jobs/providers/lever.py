@@ -12,6 +12,8 @@ from ..base import Provider, RawJob
 
 DEFAULT_COMPANIES = [
     "voodoo", "ro", "leadiq", "match", "spotify", "brex", "ramp", "notion",
+    # India-hiring companies (verified live). Extend via LEVER_COMPANIES.
+    "meesho", "zeta", "cred", "paytm", "hevodata", "mindtickle",
 ]
 ENDPOINT = "https://api.lever.co/v0/postings/{company}"
 

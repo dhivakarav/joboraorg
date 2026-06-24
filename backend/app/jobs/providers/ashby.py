@@ -13,7 +13,8 @@ from typing import List
 from ..base import Provider, RawJob
 
 # Curated boards with active Ashby job boards. Extend via ASHBY_BOARDS env.
-DEFAULT_BOARDS = ["Ramp", "Notion", "Linear", "Vanta", "Posthog", "Mercury"]
+DEFAULT_BOARDS = ["Ramp", "Notion", "Linear", "Vanta", "Posthog", "Mercury",
+                  "atlan", "sarvam"]  # India-hiring (verified live; Sarvam AI = Bengaluru)
 ENDPOINT = "https://api.ashbyhq.com/posting-api/job-board/{board}"
 
 

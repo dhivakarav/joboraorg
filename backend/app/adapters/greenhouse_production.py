@@ -88,8 +88,16 @@ def resolve_form_url(job: dict) -> Optional[str]:
     bj = parse_board_job(job)
     if bj:
         return EMBED_URL.format(jid=bj[1])
-    # Allow an explicit greenhouse embed/boards URL straight through (tests/mock).
     url = job.get("form_url") or job.get("apply_url") or ""
+    # The Greenhouse embed form is keyed by the job id (token) alone, so we can build
+    # it from a gh_jid even when the apply URL is on the COMPANY's own careers domain
+    # (e.g. coinbase.com/careers/...?gh_jid=, druva.com/.../jobs/NNN/?gh_jid=NNN) —
+    # which parse_board_job can't recognise as a greenhouse board. (Verified: the
+    # embed form loads with the standard fields for these ids.)
+    m = re.search(r"gh_jid=(\d+)", url) or re.search(r"/jobs/(\d+)", url)
+    if m:
+        return EMBED_URL.format(jid=m.group(1))
+    # Allow an explicit greenhouse embed/boards URL straight through (tests/mock).
     if "greenhouse.io" in url or url.startswith("http://127.0.0.1") or url.startswith("http://localhost"):
         return url
     return None
@@ -105,6 +113,38 @@ def _split_name(profile: dict) -> tuple:
     return name, name or "Applicant"
 
 
+async def _fill_react_input(loc, value: str) -> bool:
+    """Fill a (possibly React-controlled) input and VERIFY the value persisted.
+
+    Greenhouse's modern embed form uses controlled React inputs that can silently
+    drop a programmatic `.fill()`. So we fill, read the value back, and if it didn't
+    stick, retry by focusing + typing character-by-character (which fires the same
+    key events a human would). Returns True only if the value is actually present.
+    """
+    value = str(value)
+    try:
+        await loc.scroll_into_view_if_needed(timeout=3000)
+    except Exception:
+        pass
+    try:
+        await loc.fill(value, timeout=5000)
+    except Exception:
+        pass
+    try:
+        if (await loc.input_value() or "").strip() == value.strip():
+            return True
+    except Exception:
+        pass
+    # Retry: clear, focus, and type (fires real keydown/input events React listens to).
+    try:
+        await loc.click(timeout=3000)
+        await loc.fill("", timeout=3000)
+        await loc.type(value, delay=15)
+        return (await loc.input_value() or "").strip() == value.strip()
+    except Exception:
+        return False
+
+
 async def apply(form_url: str, fields: List[GHField], profile: dict, resume_path: str,
                 answers: Dict[str, str], evidence_dir: str, tag: str) -> ApplyOutcome:
     from playwright.async_api import async_playwright
@@ -113,10 +153,24 @@ async def apply(form_url: str, fields: List[GHField], profile: dict, resume_path
     Path(evidence_dir).mkdir(parents=True, exist_ok=True)
     out.step(f"=== production apply: {form_url} (genuine user; explicit click) ===")
 
+    # GUARD: never launch the browser / call page.goto() without a real form URL.
+    # If the apply page is on a company careers domain we can't map to a Greenhouse
+    # form (no gh_jid / board), fail gracefully as Manual Apply — don't crash.
+    if not form_url:
+        out.submission_status = S_MANUAL
+        out.failure_reason = ("Could not resolve a Greenhouse application form for this "
+                              "listing (its apply page isn't a standard Greenhouse board "
+                              "and carries no gh_jid). Apply manually via the listing link.")
+        out.step(out.failure_reason)
+        return out
+
     first, last = _split_name(profile)
     core_vals = {
         "first_name": first, "last_name": last,
         "email": profile.get("email", ""), "phone": profile.get("phone", ""),
+        # Location is a real Greenhouse application field (often required). Fill it
+        # from the user's profile so submissions aren't incomplete / rejected.
+        "location": profile.get("location", "") or "",
     }
 
     # Integrity gate: required screening questions must be answered by the user.
@@ -157,17 +211,47 @@ async def apply(form_url: str, fields: List[GHField], profile: dict, resume_path
 
         try:
             await page.goto(form_url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_selector("#first_name, form", timeout=15000)
+            # Wait for the actual first_name INPUT to be visible (not just any <form>):
+            # the modern Greenhouse embed is a React app, and the <form> exists before
+            # the inputs hydrate — filling too early silently drops the values.
+            try:
+                await page.wait_for_selector("#first_name", state="visible", timeout=15000)
+            except Exception:
+                await page.wait_for_selector("#first_name, form", timeout=5000)
+            await page.wait_for_timeout(400)   # let React finish hydrating handlers
             out.step("form loaded")
 
             # core fields (genuine profile)
             for name, val in core_vals.items():
                 if not val:
                     continue
-                loc = page.locator(f"#{name}, [name='{name}']")
-                if await loc.count():
-                    await loc.first.fill(str(val))
-                    out.fields_filled.append(name)
+                # Greenhouse's location input is a Google-Places autocomplete whose
+                # name is job_application[location] (not "location"), so it needs
+                # broader selectors than the simple #name / [name=name] core fields.
+                if name == "location":
+                    sel = ("#location, [name='job_application[location]'], "
+                           "[name='location'], input[autocomplete='address-level2'], "
+                           "input[aria-label*='Location' i]")
+                else:
+                    sel = f"#{name}, [name='{name}']"
+                loc = page.locator(sel)
+                if not await loc.count():
+                    continue
+                if not await _fill_react_input(loc.first, str(val)):
+                    out.err(f"core field '{name}' did not retain its value after fill")
+                    continue
+                out.fields_filled.append(name)
+                # Location autocomplete: after typing, pick the first suggestion so
+                # the value is actually accepted by the form's validation.
+                if name == "location":
+                    try:
+                        await page.wait_for_timeout(900)
+                        opt = page.locator(".pac-item, #location_autocomplete li, "
+                                           "[role='option']").first
+                        if await opt.count():
+                            await opt.click()
+                    except Exception:
+                        pass
 
             # resume (genuine file)
             if resume_path and Path(resume_path).exists():

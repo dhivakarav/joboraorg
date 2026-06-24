@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    event,
 )
 from sqlalchemy.orm import relationship
 
@@ -87,6 +88,8 @@ class JobFilter(Base):
     keywords = Column(Text, default="[]")    # JSON
     min_salary = Column(Integer, default=500)
     daily_limit = Column(Integer, default=20)
+    # Minimum resume↔job match score (0-100) to show/store a job. Default 50.
+    min_match_score = Column(Integer, default=50)
 
     user = relationship("User", back_populates="filters")
 
@@ -107,8 +110,11 @@ class Application(Base):
     deadline = Column(String, default="")
     apply_url = Column(Text, default="")             # real application URL
     verified = Column(Boolean, default=False)        # source-validated
-    match_score = Column(Integer, default=0)         # 0-100 fit score
+    match_score = Column(Integer, default=0)         # 0-100 resume↔job fit score
     manual_required = Column(Boolean, default=False) # auto-submit not possible
+    # Hybrid apply model: "auto_applied" (ATS public apply path) or
+    # "manual_link_provided" (no public API → user opens apply_url to apply).
+    application_mode = Column(String, default="manual_link_provided", index=True)
     job_url_hash = Column(String, index=True, default="")  # job fingerprint (dedupe)
     # Internal lifecycle hint (NOT shown raw to users — see display_status).
     # Saved | Tracked | Pending | (legacy: Applied/Submitted). Never displayed
@@ -143,6 +149,14 @@ class Application(Base):
         """Canonical, evidence-gated status — the ONLY status any UI should show."""
         from .status import display_status
         return display_status(self)
+
+    @property
+    def pipeline_stage(self) -> str:
+        """The raw user-set stage (Saved/Tracked/Skipped/Interview/Offer/Rejected)
+        or "" — for the Activity Log Stage dropdown, so it reflects exactly what the
+        user saved rather than being masked by submission_status."""
+        from .status import pipeline_stage
+        return pipeline_stage(self)
 
     __table_args__ = (
         Index("ix_applications_user_status", "user_id", "status"),       # H4 dashboard/activity
@@ -181,3 +195,41 @@ class Feedback(Base):
     contact_email = Column(String, default="")
     status = Column(String, default="open", index=True)  # open | triaged | closed
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+@event.listens_for(Application, "before_insert")
+@event.listens_for(Application, "before_update")
+def _derive_application_mode(mapper, connection, target):
+    """Hybrid model: every application's mode is derived from its source — an
+    auto-capable ATS (Greenhouse/Lever/Ashby/SmartRecruiters/Workable) →
+    'auto_applied'; anything else (aggregators + no-API portals) →
+    'manual_link_provided'. Centralised so all create/update paths stay correct."""
+    from .automation import portals
+    target.application_mode = portals.source_mode(target.source or target.portal or "")
+
+
+class PlatformCredential(Base):
+    """Per-user, per-platform login credentials for live auto-submission.
+
+    Email + password are stored ENCRYPTED at rest (Fernet, via
+    security.encrypt_value). They are decrypted only in-process, only at the
+    moment a live submission drives the platform's browser under the user's own
+    account. One active credential per (user, platform).
+
+    NOTE: this reintroduces the previously-removed `portal_credentials` table for
+    the Internshala live auto-submit feature (Option B). Real submission stays
+    gated behind JOBORA_LIVE=1 + explicit per-application approval.
+    """
+    __tablename__ = "platform_credentials"
+    __table_args__ = (
+        Index("ix_platform_cred_user_platform", "user_id", "platform", unique=True),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    platform = Column(String, nullable=False)          # e.g. "Internshala"
+    encrypted_username = Column(Text, default="")      # Fernet token (login email/username)
+    encrypted_password = Column(Text, default="")      # Fernet token
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -15,6 +15,17 @@ os.environ["INPROCESS_WORKER"] = "0"   # don't start the worker during tests
 os.environ["JSEARCH_API_KEY"] = ""     # never hit the live JSearch API from tests (ignore local .env)
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkstemp(suffix='.db')[1]}"
 
+# Provider config must be DETERMINISTIC for tests, regardless of the developer's
+# local .env (which points these at the local MOCK servers on :8001 for dev). We
+# set them here BEFORE the app/config import so `_load_dotenv` (which never
+# overrides already-set vars) leaves them alone. Without this, the dev mock values
+# leak in and break the provider-config tests (JSearch host, Internshala "disabled").
+os.environ["JSEARCH_HOST"] = "jsearch.p.rapidapi.com"   # canonical RapidAPI host (not the local mock)
+os.environ["INTERNSHALA_FEED_URL"] = ""                  # no authorized feed → provider disabled by default
+os.environ["INTERNSHALA_FEED_TRUSTED"] = "0"
+os.environ["INTERNSHALA_FEED_AUTHORIZED"] = "0"
+os.environ["JOBORA_LIVE"] = "0"                          # never run live browser automation in tests
+
 import pytest
 from fastapi.testclient import TestClient
 

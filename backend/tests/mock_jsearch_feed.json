@@ -1,0 +1,4 @@
+{"data": [
+  {"id": "js-001", "title": "Software Engineering Intern at Internshala Partner", "company": "Internshala Partner", "location": "Bengaluru, Karnataka", "job_type": "Internship", "job_apply_link": "https://internshala.com/internship/detail/software-engineering-intern-12345", "job_salary": "₹25,000 /month", "job_description": "Join our engineering team. Skills: Python, React"},
+  {"id": "js-002", "title": "Data Science Intern via Internshala", "company": "Analytics Startup", "location": "Work From Home", "job_type": "Internship", "job_apply_link": "https://internshala.com/internship/detail/data-science-intern-67890", "job_salary": "₹20,000 /month", "job_description": "ML internship. Skills: Machine Learning, Python"}
+]}

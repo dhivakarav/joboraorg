@@ -82,17 +82,28 @@ export function Toggle({ checked, onChange }) {
 }
 
 // ---------- Status badge ----------
-// Canonical application statuses. "Applied" is retired: only "Verified Submitted"
-// signals a confirmed, evidenced submission. Any stale "Applied" is coerced to
-// "Tracked" so it can never reach the screen.
+// Application statuses. Automated submission outcomes stay evidence-gated
+// (only "Verified Submitted" signals a confirmed, evidenced auto-submission).
+// Applied / Interview / Offer / Rejected are SELF-REPORTED pipeline stages a
+// user sets by hand — automation never emits them.
 const STATUS_STYLE = {
   // canonical application statuses
   "Verified Submitted": "border-success/60 text-success",
   Submitted: "border-blue-400/50 text-blue-300",
+  "Submitted (Unverified)": "border-muted/50 text-muted",
   Tracked: "border-blue-400/40 text-blue-300",
   "Manual Apply": "border-yellow-500/40 text-yellow-400",
+  "Pending Approval": "border-amber-400/60 text-amber-300",
   Draft: "border-line text-muted",
   Failed: "border-danger/40 text-danger",
+  "Failed — No Confirmation": "border-danger/40 text-danger",
+  "Failed — Form Not Found": "border-danger/40 text-danger",
+  "Failed — Submit Not Found": "border-danger/40 text-danger",
+  // self-reported pipeline stages
+  Applied: "border-blue-400/50 text-blue-300",
+  Interview: "border-purple-400/50 text-purple-300",
+  Offer: "border-emerald-400/60 text-emerald-300",
+  Rejected: "border-danger/40 text-danger",
   // other (portal/user/admin) labels still used around the app
   Saved: "border-line text-muted",
   Skipped: "border-muted/40 text-muted",
@@ -110,10 +121,20 @@ const STATUS_STYLE = {
 };
 
 export function StatusBadge({ status }) {
-  // Hard guard: never render the retired "Applied" label.
-  const s = status === "Applied" ? "Tracked" : status || "Draft";
+  const s = status || "Draft";
   const label = s.charAt(0).toUpperCase() + s.slice(1);
   return <span className={`badge ${STATUS_STYLE[s] || "border-line text-muted"}`}>{label}</span>;
+}
+
+// Hybrid apply-mode badge: green "Auto-Applied" (ATS public apply path) vs blue
+// "Apply Manually" (no public API → user opens the apply link).
+export function ApplyModeBadge({ mode }) {
+  const auto = mode === "auto_applied";
+  return (
+    <span className={`badge ${auto ? "border-success/50 text-success" : "border-blue-400/50 text-blue-300"}`}>
+      {auto ? "Auto-Applied" : "Apply Manually"}
+    </span>
+  );
 }
 
 // Canonical Evidence cell — keyed on display_status + evidence presence (single

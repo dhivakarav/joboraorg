@@ -1,0 +1,20 @@
+[
+  {"id": "int-001", "title": "Software Engineering Intern", "company": "TechCorp India",
+   "type": "internship", "stipend": "₹25,000 /month", "location": "Bengaluru",
+   "duration": "6 Months", "skills": ["Python", "React", "FastAPI"],
+   "url": "http://localhost:5173/internship/detail/software-engineering-intern-001/",
+   "description": "Join our engineering team to build scalable web applications.",
+   "posted_at": "2026-06-15", "deadline": "2026-07-15"},
+  {"id": "int-002", "title": "Data Science Intern", "company_name": "Analytics Labs",
+   "type": "internship", "stipend": "₹20,000 /month", "location": "Work from home",
+   "duration": "3 Months", "skills": "Python, Machine Learning, Pandas",
+   "url": "http://localhost:5173/internship/detail/data-science-intern-002/",
+   "description": "Work on ML models for real-time analytics.",
+   "posted_at": "2026-06-16", "deadline": "2026-07-10"},
+  {"id": "int-003", "title": "Fresher Backend Developer", "company": "StartupXYZ",
+   "type": "Fresher Job", "stipend": "₹4,00,000 /year", "location": "Pune",
+   "duration": "", "skills": ["Node.js", "MongoDB", "Express"],
+   "url": "http://localhost:5173/job/detail/fresher-backend-developer-003/",
+   "description": "Entry-level backend development role.",
+   "posted_at": "2026-06-10", "deadline": "2026-06-30"}
+]

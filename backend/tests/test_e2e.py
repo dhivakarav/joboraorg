@@ -100,8 +100,10 @@ def test_e2e_signup_resume_search_track_verify(client, journey_user, stub_search
     assert up.status_code == 200, up.text
     assert client.get("/api/resume/parsed", headers=H(tok)).json()["parsed_email"] == "e2e@example.com"
 
-    # Job search (stubbed) — eligibility + internship filter applied
-    jr = client.get("/api/jobs?q=software", headers=H(tok))
+    # Job search (stubbed) — eligibility + internship filter applied. min_match=0
+    # disables the resume match-score threshold (this journey test isn't testing
+    # that filter; the stub jobs intentionally have empty descriptions).
+    jr = client.get("/api/jobs?q=software&min_match=0", headers=H(tok))
     assert jr.status_code == 200, jr.text
     items = jr.json()["items"]
     titles = [i["title"] for i in items]

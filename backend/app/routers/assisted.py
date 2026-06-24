@@ -1,7 +1,8 @@
-"""Assisted Apply — Lever & Ashby (and any captcha-gated platform).
+"""Assisted Apply — Lever, Ashby & Internshala (captcha-/login-gated platforms).
 
-These platforms ship hCaptcha (Lever) / reCAPTCHA (Ashby) on every public form,
-so unattended submission is impossible. Assisted Apply is the honest flow:
+Lever/Ashby ship hCaptcha/reCAPTCHA on every public form and Internshala is
+account-gated (login required, no public submit API), so unattended submission is
+impossible / not permitted. Assisted Apply is the honest flow:
 
   1. /assisted/prepare  → Jobora prefills the form from the user's REAL profile,
      surfaces the required screening questions for the user to review/answer, and
@@ -37,7 +38,15 @@ router = APIRouter(prefix="/api/jobs/assisted", tags=["assisted-apply"])
 _PLATFORM_NOTE = {
     "Lever": "Lever forms include an hCaptcha you must complete before submitting.",
     "Ashby": "Ashby forms include a reCAPTCHA and submit in-app (no page redirect).",
+    "Internshala": ("Internshala requires you to be signed in. Open the listing, "
+                    "sign in if prompted, then complete and submit the application."),
 }
+
+# Captcha each platform ships on its public form (empty = none; e.g. login-gated).
+_PLATFORM_CAPTCHA = {"Lever": "hCaptcha", "Ashby": "reCAPTCHA"}
+
+# Platforms eligible for the Assisted Apply (prefill + finish-on-portal) flow.
+_ASSISTED_PLATFORMS = ("Lever", "Ashby", "Internshala")
 
 
 def _prefill_from_profile(profile: dict) -> dict:
@@ -65,9 +74,10 @@ def prepare_assisted(payload: dict, user: User = Depends(get_approved_user),
     if not job.get("apply_url"):
         raise HTTPException(status_code=400, detail="job.apply_url required")
     adapter = adapter_for(job)
-    if adapter.platform not in ("Lever", "Ashby"):
+    if adapter.platform not in _ASSISTED_PLATFORMS:
         raise HTTPException(status_code=400,
-                            detail=f"Assisted Apply supports Lever/Ashby; got {adapter.platform}")
+                            detail=f"Assisted Apply supports {'/'.join(_ASSISTED_PLATFORMS)}; "
+                                   f"got {adapter.platform}")
 
     profile = load_profile(db, user)
     if not profile.get("resume_path"):
@@ -94,7 +104,7 @@ def prepare_assisted(payload: dict, user: User = Depends(get_approved_user),
                       {"platform": adapter.platform, "mode": "assisted"})
 
     prefill = _prefill_from_profile(profile)
-    captcha = "hCaptcha" if adapter.platform == "Lever" else "reCAPTCHA"
+    captcha = _PLATFORM_CAPTCHA.get(adapter.platform, "")
     # Standard required fields these portals always ask (prefilled from the profile).
     required_fields = [
         {"label": "Full name", "value": prefill["full_name"], "required": True},
@@ -119,7 +129,9 @@ def prepare_assisted(payload: dict, user: User = Depends(get_approved_user),
             "the portal — Jobora never auto-fills answers under your name."),
         "instructions": [
             "Review the details Jobora prepared from your profile.",
-            f"Open the apply page — fill any screening questions, complete the {captcha}, and submit.",
+            (f"Open the apply page — fill any screening questions, complete the {captcha}, and submit."
+             if captcha else
+             "Open the listing — sign in if prompted, fill any screening questions, and submit."),
             "Come back and record your confirmation (URL + reference id + screenshot).",
         ],
         "status": app.display_status,

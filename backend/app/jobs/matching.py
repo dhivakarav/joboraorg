@@ -22,6 +22,29 @@ def _tokens(text: str) -> set:
     return set(re.findall(r"[a-z0-9+#.]+", (text or "").lower()))
 
 
+# AI/ML signals. TITLE match is generous (incl. bare ML/AI/CV tokens, which are
+# meaningful in a job title). SNIPPET match is STRICT — bare "ai"/"ml"/"cv" appear
+# in countless descriptions, so the snippet must carry an unambiguous multi-word
+# phrase to count, otherwise analytics massively over-count AI/ML.
+_AI_ML_TITLE_RE = re.compile(
+    r"\b(machine learning|deep learning|ml|ai|artificial intelligence|"
+    r"data scientist|data science|nlp|computer vision|cv|"
+    r"generative ai|genai|llm|mlops|ml engineer|ai engineer|"
+    r"neural network|tensorflow|pytorch)\b", re.I)
+_AI_ML_SNIPPET_RE = re.compile(
+    r"\b(machine learning|deep learning|artificial intelligence|data scien\w+|"
+    r"generative ai|genai|large language model|mlops|computer vision|"
+    r"natural language processing|neural network)\b", re.I)
+
+
+def is_ai_ml(title: str, snippet: str = "") -> bool:
+    """True if a job is an AI/ML role. Title is the primary signal; snippet only
+    counts when it carries a strong multi-word AI/ML phrase."""
+    if _AI_ML_TITLE_RE.search(title or ""):
+        return True
+    return bool(_AI_ML_SNIPPET_RE.search(snippet or ""))
+
+
 def score_job(job: dict, profile: dict) -> Dict:
     skills: List[str] = [s.lower() for s in profile.get("skills", []) if s]
     roles: List[str] = [r.lower() for r in profile.get("roles", []) if r]

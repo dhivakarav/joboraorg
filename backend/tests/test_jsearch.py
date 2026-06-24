@@ -5,7 +5,10 @@ from app.jobs.providers.jsearch import ENDPOINT, JSearchProvider
 
 
 class _Resp:
-    def __init__(self, payload): self._p = payload
+    def __init__(self, payload, status_code=200, headers=None):
+        self._p = payload
+        self.status_code = status_code
+        self.headers = headers or {"x-ratelimit-requests-remaining": "199"}
     def raise_for_status(self): pass
     def json(self): return self._p
 
