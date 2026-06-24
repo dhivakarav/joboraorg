@@ -70,6 +70,11 @@ def _load_context(user_id: int) -> dict:
             "portfolio_url": resume.portfolio_url if resume else "",
             "skills": skills,
             "experience": (resume.parsed_experience if resume else 0) or (user.years_experience if user else 0),
+            # Feed the explicit early-career signal so the engine's eligibility check
+            # reads seeker_type directly (student/fresher) the same way Find Jobs does
+            # — years_experience stays as the fallback (see eligibility._is_early:
+            # "early-career if seeker_type is student/fresher OR years_experience <= 2").
+            "seeker_type": (user.seeker_type if user else "") or "",
             "roles": roles, "keywords": keywords, "locations": locations,
         }
         resume_path = resume.file_path if resume else ""
