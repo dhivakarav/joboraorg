@@ -75,9 +75,9 @@ export default function Settings() {
         </p>
         <div className="flex flex-wrap gap-2">
           {[
-            { key: "student", emoji: "🎓", label: "Student", hint: "Internships first" },
-            { key: "fresher", emoji: "🌱", label: "Fresher", hint: "Entry-level jobs first" },
-            { key: "experienced", emoji: "💼", label: "Experienced", hint: "Full-time jobs first" },
+            { key: "student", icon: "○", label: "Student", hint: "Internships first" },
+            { key: "fresher", icon: "◐", label: "Fresher", hint: "Entry-level jobs first" },
+            { key: "experienced", icon: "●", label: "Experienced", hint: "Full-time jobs first" },
           ].map((o) => (
             <button
               key={o.key}
@@ -87,7 +87,9 @@ export default function Settings() {
                 user.seeker_type === o.key ? "border-white" : "hover:border-white/40"
               }`}
             >
-              <div className="font-medium">{o.emoji} {o.label}</div>
+              <div className="font-medium flex items-center gap-2">
+                <span className="w-4 text-center text-muted">{o.icon}</span>{o.label}
+              </div>
               <div className="text-xs text-muted">{o.hint}</div>
             </button>
           ))}
