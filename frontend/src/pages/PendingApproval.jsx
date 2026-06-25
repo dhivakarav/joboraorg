@@ -1,13 +1,19 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { AuthShell } from "./Login";
 
 export default function PendingApproval() {
+  const notice = useLocation().state?.notice;
   return (
     <AuthShell title="Account pending approval" subtitle="Almost there">
       <div className="text-center py-4">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-line bg-elevated text-3xl shadow-glossy">
           ⏳
         </div>
+        {notice && (
+          <div className="badge border-amber-500/40 text-amber-300 w-full justify-center py-2 mb-4 text-xs">
+            {notice}
+          </div>
+        )}
         <p className="text-sm text-muted leading-relaxed">
           Your account is <span className="text-white font-medium">pending admin approval</span>.
           You won't be able to access any features until an administrator approves your account.

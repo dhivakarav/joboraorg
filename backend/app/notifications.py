@@ -9,6 +9,7 @@ password reset. Keep bodies plain-text + minimal HTML for deliverability.
 """
 from __future__ import annotations
 
+import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -16,12 +17,23 @@ from typing import Optional
 
 from .config import settings
 
+log = logging.getLogger("jobara.email")
+
 
 def _send(to: str, subject: str, body: str, html: Optional[str] = None) -> bool:
+    """Send one email. Returns True on success, False on failure.
+
+    Failures are LOUDLY logged at ERROR level (with the email type/subject,
+    recipient, and the real exception) so a broken email setup is never silent —
+    but the SMTP password is never logged. Still never raises into the request
+    path; callers that care (e.g. signup) inspect the return value.
+    """
     if not to:
+        log.error("EMAIL NOT SENT: empty recipient (subject=%r)", subject)
         return False
     if not settings.SMTP_HOST:
-        # Console fallback — visible in dev logs.
+        # No SMTP configured → dev console fallback (clearly logged, not silent).
+        log.info("email (console fallback, no SMTP_HOST) to=%s subject=%r", to, subject)
         print(f"\n[email→{to}] {subject}\n{'-' * 50}\n{body}\n{'-' * 50}\n")
         return True
     try:
@@ -38,9 +50,13 @@ def _send(to: str, subject: str, body: str, html: Optional[str] = None) -> bool:
             if settings.SMTP_USER:
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_FROM, [to], msg.as_string())
+        log.info("email sent to=%s subject=%r via=%s", to, subject, settings.SMTP_HOST)
         return True
     except Exception as exc:
-        print(f"[email] send to {to} failed: {exc}")
+        # Loud + debuggable. `exc` carries the SMTP server response (e.g. a 550
+        # rejection) but NEVER the password — we don't log settings.SMTP_PASSWORD.
+        log.error("EMAIL SEND FAILED to=%s subject=%r from=%s host=%s: %s",
+                  to, subject, settings.SMTP_FROM, settings.SMTP_HOST, exc)
         return False
 
 

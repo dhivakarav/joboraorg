@@ -15,6 +15,7 @@ from ..schemas import (
     LoginIn,
     RefreshIn,
     RegisterIn,
+    RegisterOut,
     ResendVerificationIn,
     ResetPasswordIn,
     TokenOut,
@@ -41,7 +42,7 @@ def _validate_password(pw: str) -> None:
         raise HTTPException(status_code=400, detail="Password must include both letters and numbers")
 
 
-@router.post("/register", response_model=UserOut)
+@router.post("/register", response_model=RegisterOut)
 def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
     enforce("register", client_ip(request), settings.RL_REGISTER_PER_HOUR, 3600)
     _validate_password(data.password)
@@ -80,7 +81,13 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
         invite.used_at = datetime.utcnow()
         db.commit()
     notifications.account_pending(user.email, user.full_name)
-    _send_verification(user, raw_verify)
+    # Signup is NOT rolled back if the verification email fails (resilience): the
+    # account is created, the failure is loudly logged by _send, and we hand the
+    # user a clear hint to use "Resend verification" so they're never left guessing.
+    sent = _send_verification(user, raw_verify)
+    user.notice = None if sent else (
+        "Account created, but we couldn't send your verification email right now. "
+        "Use 'Resend verification' on the sign-in screen to get a new link.")
 
     from .. import analytics
     analytics.capture(analytics.SIGNUP, user.id,
@@ -88,9 +95,11 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
     return user
 
 
-def _send_verification(user: User, raw_token: str) -> None:
+def _send_verification(user: User, raw_token: str) -> bool:
+    """Send the verification email. Returns True on success, False on failure
+    (failure is already logged at ERROR by notifications._send)."""
     link = f"/verify-email?token={raw_token}"
-    notifications._send(
+    return notifications._send(
         user.email, "Verify your Jobara email",
         f"Hi {user.full_name},\n\nConfirm your email to activate your account:\n"
         f"{settings.APP_BASE_URL}{link}\n\n(Link valid 24h.)",

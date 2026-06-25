@@ -25,11 +25,13 @@ export default function Register() {
     setError("");
     setBusy(true);
     try {
-      await api.post("/auth/register", {
+      const res = await api.post("/auth/register", {
         ...form,
         years_experience: Number(form.years_experience) || 0,
       });
-      navigate("/pending");
+      // If the verification email couldn't be sent, carry the hint to /pending
+      // so the user knows to use "Resend verification" rather than assuming all is well.
+      navigate("/pending", res?.notice ? { state: { notice: res.notice } } : undefined);
     } catch (err) {
       setError(err.message);
     } finally {

@@ -68,6 +68,12 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+class RegisterOut(UserOut):
+    # Soft, non-blocking hint shown after signup when the verification email
+    # couldn't be sent (None otherwise). Signup still succeeds either way.
+    notice: Optional[str] = None
+
+
 # ----- Profile -----
 class ProfileUpdateIn(BaseModel):
     full_name: Optional[str] = None

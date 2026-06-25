@@ -106,3 +106,68 @@ def test_forgot_password_no_email_enumeration(client, monkeypatch):
     # Identical generic body in both cases — can't tell which email is registered.
     assert known.json() == unknown.json()
     assert "if an account exists" in known.json()["message"].lower()
+
+
+# ---- silent-failure fix: SMTP failure is loudly logged, response stays generic --
+def test_forgot_password_smtp_failure_logged_but_response_generic(client, monkeypatch, caplog):
+    """A failed send (e.g. Resend 550) must still return the generic message (no
+    enumeration leak) AND produce a clear ERROR log so the operator can see it."""
+    import logging
+    from app import notifications
+
+    class _BoomSMTP:  # any use of the SMTP connection raises
+        def __init__(self, *a, **k):
+            raise notifications.smtplib.SMTPException("simulated 550 rejection")
+
+    monkeypatch.setattr(notifications.smtplib, "SMTP", _BoomSMTP)
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.test")  # force the SMTP path
+    monkeypatch.setattr(settings, "EXPOSE_RESET_TOKEN", False)
+    _, email, _ = _make_user()  # real account → a send is attempted
+
+    with caplog.at_level(logging.ERROR, logger="jobara.email"):
+        r = client.post("/api/auth/forgot-password", json={"email": email})
+
+    # User-facing: unchanged generic message (anti-enumeration preserved)
+    assert r.status_code == 200
+    assert r.json() == {
+        "message": "If an account exists for that email, a reset link has been generated."
+    }
+    # Internal: a loud ERROR log was produced for the failed send
+    errs = [rec for rec in caplog.records
+            if rec.levelname == "ERROR" and "EMAIL SEND FAILED" in rec.getMessage()]
+    assert errs, "expected a loud ERROR-level log for the failed email send"
+    # ...and it must not contain the SMTP password
+    assert all(settings.SMTP_PASSWORD not in rec.getMessage() for rec in caplog.records if settings.SMTP_PASSWORD)
+
+
+# ---- item 3: signup succeeds even if the verification email send fails ----------
+def test_signup_succeeds_when_verification_email_fails(client, monkeypatch):
+    """A failed verification email must NOT roll back signup; the account is created,
+    and the response carries a soft 'resend verification' hint."""
+    from app import notifications
+
+    class _BoomSMTP:
+        def __init__(self, *a, **k):
+            raise notifications.smtplib.SMTPException("simulated verification-email failure")
+
+    monkeypatch.setattr(notifications.smtplib, "SMTP", _BoomSMTP)
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.test")  # force the SMTP path
+
+    email = f"newsignup{int(time.time()*1e6)}@example.com"
+    r = client.post("/api/auth/register", json={
+        "full_name": "New User", "email": email, "password": "Passw0rd1"})
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["email"] == email                      # signup succeeded
+    assert body.get("notice")                          # soft hint present
+    assert "resend verification" in body["notice"].lower()
+
+    # the account is actually created + queryable, still unverified
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter_by(email=email).first()
+        assert u is not None
+        assert u.email_verified is False
+    finally:
+        db.close()
