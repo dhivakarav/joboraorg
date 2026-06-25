@@ -15,6 +15,7 @@ from ..schemas import (
     LoginIn,
     RefreshIn,
     RegisterIn,
+    ResendVerificationIn,
     ResetPasswordIn,
     TokenOut,
     UserOut,
@@ -109,21 +110,45 @@ def verify_email(data: VerifyEmailIn, db: Session = Depends(get_db)):
     return {"message": "Email verified. You can sign in once an admin approves your account."}
 
 
+@router.post("/resend-verification")
+def resend_verification(data: ResendVerificationIn, request: Request, db: Session = Depends(get_db)):
+    """Re-send the verification email. Generic response either way so the endpoint
+    can't be used to probe which emails are registered."""
+    enforce("resend_verification", client_ip(request), settings.RL_REGISTER_PER_HOUR, 3600)
+    generic = {"message": "If that email is registered and unverified, a new verification link has been sent."}
+    email = data.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if user and not user.email_verified:
+        raw_verify = generate_reset_token()
+        user.email_verify_hash = hash_token(raw_verify)
+        user.email_verify_expires = datetime.utcnow() + timedelta(hours=24)
+        db.commit()
+        _send_verification(user, raw_verify)
+    return generic
+
+
 @router.post("/login", response_model=TokenOut)
 def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
     enforce("login", client_ip(request), settings.RL_LOGIN_PER_MIN, 60)
     email = data.email.strip().lower()
     user = db.query(User).filter(User.email == email).first()
-    if not user or not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    # Distinct messages (user-enumeration trade-off accepted): "not registered"
+    # when the email is unknown, "incorrect password" when it exists but the
+    # password is wrong.
+    if not user:
+        raise HTTPException(status_code=404, detail="This email is not registered")
+    if not verify_password(data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect password")
 
     if not user.is_admin and user.status == "pending":
         raise HTTPException(status_code=403, detail="Your account is pending admin approval")
     if not user.is_admin and user.status == "suspended":
         raise HTTPException(status_code=403, detail="Your account has been suspended")
-    # H5: optional email-verification gate (off by default).
+    # Email-verification gate (ON by default). Block unverified non-admins with a
+    # distinct message the frontend detects to offer a "resend verification" action.
     if settings.REQUIRE_EMAIL_VERIFICATION and not user.is_admin and not user.email_verified:
-        raise HTTPException(status_code=403, detail="Please verify your email before signing in")
+        raise HTTPException(status_code=403,
+                            detail="Please verify your email before logging in.")
 
     tokens = issue_tokens(user)
     from .. import analytics

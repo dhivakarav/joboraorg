@@ -25,6 +25,10 @@ os.environ["INTERNSHALA_FEED_URL"] = ""                  # no authorized feed â†
 os.environ["INTERNSHALA_FEED_TRUSTED"] = "0"
 os.environ["INTERNSHALA_FEED_AUTHORIZED"] = "0"
 os.environ["JOBORA_LIVE"] = "0"                          # never run live browser automation in tests
+# Email-verification gate defaults ON in production, but legacy /login tests (e2e/
+# medium/b2) create+log-in unverified users â€” keep it OFF for the suite by default;
+# the dedicated auth tests opt-in per-test via monkeypatch(settings, ...).
+os.environ["REQUIRE_EMAIL_VERIFICATION"] = "0"
 
 import pytest
 from fastapi.testclient import TestClient

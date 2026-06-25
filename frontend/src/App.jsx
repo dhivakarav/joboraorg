@@ -8,6 +8,7 @@ import Register from "./pages/Register";
 import PendingApproval from "./pages/PendingApproval";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 
 import Dashboard from "./pages/user/Dashboard";
 import FindJobs from "./pages/user/FindJobs";
@@ -63,6 +64,7 @@ export default function App() {
       <Route path="/pending" element={<PendingApproval />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
 
       {/* User portal */}
       <Route path="/app/dashboard" element={<RequireUser><Dashboard /></RequireUser>} />

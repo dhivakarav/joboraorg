@@ -128,9 +128,10 @@ class Settings:
     # the per-user token_version).
     ACCESS_TOKEN_MINUTES: int = int(os.getenv("ACCESS_TOKEN_MINUTES", "60"))
     REFRESH_TOKEN_DAYS: int = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))
-    # H5: require email verification before login (opt-in so current deployments'
-    # admin-approval flow is unchanged until enabled).
-    REQUIRE_EMAIL_VERIFICATION: bool = os.getenv("REQUIRE_EMAIL_VERIFICATION", "0") == "1"
+    # Require email verification before login. ON by default; new signups must
+    # verify their email. (Existing accounts were grandfathered to verified so
+    # they aren't locked out — see the one-off grandfather step.)
+    REQUIRE_EMAIL_VERIFICATION: bool = os.getenv("REQUIRE_EMAIL_VERIFICATION", "1") == "1"
 
     # Fernet key for encrypting portal credentials — env-only, validated.
     CREDENTIAL_KEY: str = _resolve_credential_key()
@@ -168,7 +169,7 @@ class Settings:
     MAX_RESUME_BYTES: int = 5 * 1024 * 1024  # 5MB
 
     # Password reset
-    RESET_TOKEN_TTL_MINUTES: int = int(os.getenv("RESET_TOKEN_TTL_MINUTES", "30"))
+    RESET_TOKEN_TTL_MINUTES: int = int(os.getenv("RESET_TOKEN_TTL_MINUTES", "60"))
     # With no SMTP configured, return the reset link in the API response so the
     # flow is usable in dev. Set EXPOSE_RESET_TOKEN=0 once real email is wired up.
     EXPOSE_RESET_TOKEN: bool = os.getenv("EXPOSE_RESET_TOKEN", "1") == "1"

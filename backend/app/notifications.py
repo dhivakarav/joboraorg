@@ -76,10 +76,11 @@ def application_recorded(to: str, name: str, job_title: str, company: str, statu
 
 
 def password_reset(to: str, name: str, reset_link: str):
+    mins = settings.RESET_TOKEN_TTL_MINUTES
     _send(
         to,
         "Reset your Jobara password",
-        f"Hi {name},\n\nUse this link to set a new password (valid for 30 minutes):\n"
+        f"Hi {name},\n\nUse this link to set a new password (valid for {mins} minutes):\n"
         f"{settings.APP_BASE_URL}{reset_link}\n\nIf you didn't request this, ignore "
         f"this email.\n\n— The Jobara team",
     )

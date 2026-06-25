@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { api } from "../api/client";
 
 export default function Login() {
   const { login } = useAuth();
@@ -9,18 +10,34 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
 
   async function submit(e) {
     e.preventDefault();
     setError("");
+    setNeedsVerify(false);
+    setResendMsg("");
     setBusy(true);
     try {
       const res = await login(email, password);
       navigate(res.is_admin ? "/admin/dashboard" : "/app/dashboard");
     } catch (err) {
       setError(err.message);
+      // Blocked because the email isn't verified → offer to resend the link.
+      if (/verify your email/i.test(err.message || "")) setNeedsVerify(true);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function resendVerification() {
+    setResendMsg("");
+    try {
+      const r = await api.post("/auth/resend-verification", { email });
+      setResendMsg(r?.message || "If that email is registered and unverified, a new link has been sent.");
+    } catch (err) {
+      setResendMsg(err.message);
     }
   }
 
@@ -28,6 +45,15 @@ export default function Login() {
     <AuthShell title="Welcome back" subtitle="Sign in to your Jobora account">
       <form onSubmit={submit} className="space-y-4">
         {error && <div className="badge border-danger/40 text-danger w-full justify-center py-2">{error}</div>}
+        {needsVerify && (
+          <div className="text-center space-y-2">
+            <button type="button" onClick={resendVerification}
+                    className="text-xs text-white underline underline-offset-2 hover:text-muted">
+              Resend verification email
+            </button>
+            {resendMsg && <div className="text-xs text-muted">{resendMsg}</div>}
+          </div>
+        )}
         <div>
           <label className="label">Email</label>
           <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
