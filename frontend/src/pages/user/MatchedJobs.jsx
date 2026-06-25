@@ -43,10 +43,10 @@ export default function MatchedJobs() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Matched Jobs</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Matched Jobs</h1>
           <p className="text-sm text-muted">
             Find &amp; Link results from your last Start-Applying run — open the listing/portal to apply.
           </p>
@@ -59,11 +59,11 @@ export default function MatchedJobs() {
       {ishLink?.search_url && (
         <div className="card p-3 flex items-center justify-between gap-3 border-blue-400/30">
           <div className="text-sm">
-            <span className="font-medium text-blue-300">Search on Internshala</span>
+            <span className="font-medium text-blue-600">Search on Internshala</span>
             <span className="text-muted">{" — "}{ishLink.note}</span>
           </div>
           <a href={ishLink.search_url} target="_blank" rel="noopener noreferrer"
-             className="btn-ghost whitespace-nowrap text-blue-300 border-blue-400/40">
+             className="btn-ghost whitespace-nowrap text-blue-600 border-blue-400/40">
             Search on Internshala ↗
           </a>
         </div>
@@ -73,7 +73,7 @@ export default function MatchedJobs() {
         <Spinner />
       ) : items.length === 0 ? (
         <div className="card p-8 text-center text-sm text-muted">
-          No matched manual-apply jobs yet. Click <b className="text-white">Start Applying</b> on the
+          No matched manual-apply jobs yet. Click <b className="text-ink">Start Applying</b> on the
           Dashboard — one run auto-applies where possible and adds manual sources
           (Naukri, Unstop, Internshala, Indeed, LinkedIn, Foundit, Shine, Apna…) here with apply links.
         </div>
@@ -92,8 +92,8 @@ export default function MatchedJobs() {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap text-xs">
-                <span className="badge border-blue-400/50 text-blue-300">Apply Manually</span>
-                <span className="badge border-indigo-400/40 text-indigo-300">{applyHost(j)}</span>
+                <span className="badge border-blue-400/50 text-blue-600">Apply Manually</span>
+                <span className="badge border-indigo-400/40 text-indigo-600">{applyHost(j)}</span>
                 <StatusBadge status={j.display_status} />
               </div>
               <div className="mt-auto pt-2">

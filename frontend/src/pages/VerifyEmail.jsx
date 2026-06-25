@@ -40,7 +40,7 @@ export default function VerifyEmail() {
       {state === "error" && (
         <div className="space-y-4 text-center">
           <div className="badge border-danger/40 text-danger w-full justify-center py-2">{message}</div>
-          <Link to="/login" className="text-white underline underline-offset-4 text-sm">
+          <Link to="/login" className="text-ink underline underline-offset-4 text-sm">
             Back to sign in
           </Link>
           <p className="text-xs text-muted">

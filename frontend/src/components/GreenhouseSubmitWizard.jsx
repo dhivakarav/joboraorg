@@ -69,7 +69,7 @@ export default function GreenhouseSubmitWizard({ job, onClose, onTracked, onSubm
           <div className="font-semibold">Application queued</div>
           <p className="text-sm text-muted">
             It's submitting in the background. The result (Verified Submitted / Submitted /
-            Failed) and any evidence will appear in your <b className="text-white">Verification Center</b>.
+            Failed) and any evidence will appear in your <b className="text-ink">Verification Center</b>.
           </p>
           <button className="btn-primary w-full" onClick={onClose}>Done</button>
         </div>
@@ -83,11 +83,11 @@ export default function GreenhouseSubmitWizard({ job, onClose, onTracked, onSubm
           {/* Hard, unmissable warning */}
           <div className="card p-3 border-danger/40 text-sm">
             <span className="text-danger font-medium">This files a real application to {form.company}.</span>{" "}
-            It is sent under your name and <b className="text-white">cannot be undone</b>. Answer truthfully.
+            It is sent under your name and <b className="text-ink">cannot be undone</b>. Answer truthfully.
           </div>
 
           {!form.profile_complete && (
-            <div className="badge border-yellow-500/40 text-yellow-400 w-full justify-center py-2">
+            <div className="badge border-yellow-500/40 text-amber-600 w-full justify-center py-2">
               Complete your profile/resume first (missing: {form.missing_profile.join(", ")})
             </div>
           )}
@@ -97,7 +97,7 @@ export default function GreenhouseSubmitWizard({ job, onClose, onTracked, onSubm
             {[["Name", form.prefill.name], ["Email", form.prefill.email],
               ["Phone", form.prefill.phone], ["Resume", form.prefill.resume_filename || "—"]].map(([k, v]) => (
               <div key={k} className="flex justify-between px-3 py-2">
-                <span className="text-muted">{k}</span><span className="text-white">{v || "—"}</span>
+                <span className="text-muted">{k}</span><span className="text-ink">{v || "—"}</span>
               </div>
             ))}
           </div>
@@ -126,8 +126,8 @@ export default function GreenhouseSubmitWizard({ job, onClose, onTracked, onSubm
 
           {/* Mandatory confirmation */}
           <label className="flex items-start gap-2 text-sm cursor-pointer">
-            <input type="checkbox" className="accent-white h-4 w-4 mt-0.5" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />
-            <span>I confirm these answers are truthful and I want to submit a <b className="text-white">real application</b> to {form.company}.</span>
+            <input type="checkbox" className="accent-[#2563EB] h-4 w-4 mt-0.5" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />
+            <span>I confirm these answers are truthful and I want to submit a <b className="text-ink">real application</b> to {form.company}.</span>
           </label>
 
           <div className="flex gap-2">

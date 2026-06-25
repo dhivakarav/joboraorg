@@ -9,16 +9,16 @@ export default function Operations() {
   const [tab, setTab] = useState("metrics");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">Operations</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Operations</h1>
         <p className="text-sm text-muted">Beta metrics, feedback &amp; bug reports, and invite codes</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {[["metrics", "Metrics"], ["feedback", "Feedback & Bugs"], ["invites", "Invites"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
-                  className={`badge px-3 py-1.5 ${tab === k ? "bg-white text-black border-white" : "border-line text-muted hover:text-white"}`}>
+                  className={`badge px-3 py-1.5 ${tab === k ? "bg-brand text-white border-brand" : "border-line text-muted hover:text-ink"}`}>
             {label}
           </button>
         ))}
@@ -40,25 +40,25 @@ function Metrics({ toast }) {
     <div className="space-y-6">
       <Section title="Users">
         <StatCard label="Total" value={m.users.total} />
-        <StatCard label="Pending" value={m.users.pending} accent="text-yellow-400" />
+        <StatCard label="Pending" value={m.users.pending} accent="text-amber-600" />
         <StatCard label="Approved" value={m.users.approved} accent="text-success" />
-        <StatCard label="New this week" value={m.users.new_this_week} accent="text-blue-300" />
+        <StatCard label="New this week" value={m.users.new_this_week} accent="text-blue-600" />
       </Section>
       <Section title="Funnel">
         <StatCard label="Signed up" value={m.funnel.signed_up} />
-        <StatCard label="Uploaded resume" value={m.funnel.uploaded_resume} accent="text-blue-300" />
-        <StatCard label="Tracked a job" value={m.funnel.tracked_a_job} accent="text-blue-300" />
+        <StatCard label="Uploaded resume" value={m.funnel.uploaded_resume} accent="text-blue-600" />
+        <StatCard label="Tracked a job" value={m.funnel.tracked_a_job} accent="text-blue-600" />
       </Section>
       <Section title="Applications">
         <StatCard label="Verified Submitted" value={m.applications.verified_submitted} accent="text-success" />
-        <StatCard label="Submitted" value={m.applications.submitted} accent="text-blue-300" />
-        <StatCard label="Manual Apply" value={m.applications.manual_apply} accent="text-yellow-400" />
+        <StatCard label="Submitted" value={m.applications.submitted} accent="text-blue-600" />
+        <StatCard label="Manual Apply" value={m.applications.manual_apply} accent="text-amber-600" />
         <StatCard label="Tracked / Draft" value={m.applications.tracked_or_draft} />
         <StatCard label="Failed" value={m.applications.failed} accent="text-danger" />
         <StatCard label="Total" value={m.applications.total} />
       </Section>
       <Section title="Feedback &amp; Invites">
-        <StatCard label="Open feedback" value={m.feedback.open} accent="text-yellow-400" />
+        <StatCard label="Open feedback" value={m.feedback.open} accent="text-amber-600" />
         <StatCard label="Open bugs" value={m.feedback.bugs_open} accent="text-danger" />
         <StatCard label="Invites used" value={`${m.invites.used}/${m.invites.total}`} />
       </Section>
@@ -91,7 +91,7 @@ function Feedback({ toast }) {
       <div className="flex gap-2">
         {[["", "All"], ["feedback", "💡 Feedback"], ["bug", "🐞 Bugs"]].map(([k, l]) => (
           <button key={k} onClick={() => setKind(k)}
-                  className={`badge px-3 py-1.5 ${kind === k ? "bg-white text-black border-white" : "border-line text-muted"}`}>{l}</button>
+                  className={`badge px-3 py-1.5 ${kind === k ? "bg-brand text-white border-brand" : "border-line text-muted"}`}>{l}</button>
         ))}
       </div>
       <div className="card p-5">
@@ -201,7 +201,7 @@ function Invites({ toast }) {
                 {rows.map((r) => (
                   <tr key={r.code} className="border-b border-line/50">
                     <td className="py-2.5 pr-3 font-mono">
-                      <button onClick={() => copy(r.code)} className="hover:text-white" title="Copy">{r.code} ⧉</button>
+                      <button onClick={() => copy(r.code)} className="hover:text-ink" title="Copy">{r.code} ⧉</button>
                     </td>
                     <td className="py-2.5 pr-3">
                       <span className={`badge ${r.used ? "border-line text-muted" : "border-success/40 text-success"}`}>

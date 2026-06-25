@@ -149,9 +149,9 @@ export default function FindJobs() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">Find Jobs</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Find Jobs</h1>
         <p className="text-sm text-muted">
           Real openings matched to your resume · salary/stipend in INR · track &amp; apply on the company site
         </p>
@@ -164,14 +164,14 @@ export default function FindJobs() {
             key={t.key}
             onClick={() => selectTab(t.key)}
             className={`badge px-3 py-1.5 transition-colors ${
-              tab === t.key ? "bg-white text-black border-white" : "border-line text-muted hover:text-white"
+              tab === t.key ? "bg-brand text-white border-brand" : "border-line text-muted hover:text-ink"
             }`}
           >
             {t.label}
           </button>
         ))}
         {user?.seeker_type && tab === SEEKER_DEFAULT_TAB[user.seeker_type] && (
-          <span className="badge border-blue-400/40 text-blue-300">★ Recommended for you</span>
+          <span className="badge border-blue-400/40 text-blue-600">★ Recommended for you</span>
         )}
       </div>
 
@@ -231,7 +231,7 @@ export default function FindJobs() {
       <label className="flex items-center gap-2 text-sm cursor-pointer select-none w-fit">
         <input
           type="checkbox"
-          className="accent-white h-4 w-4"
+          className="accent-[#2563EB] h-4 w-4"
           checked={!!(internshipsOnly ?? data?.internships_only)}
           onChange={() => {
             const v = !(internshipsOnly ?? data?.internships_only);
@@ -239,7 +239,7 @@ export default function FindJobs() {
             load(tab, false, showIneligible, v);
           }}
         />
-        <span className="text-white">Internships &amp; New Grad only</span>
+        <span className="text-ink">Internships &amp; New Grad only</span>
         <Tooltip text="On by default for students/freshers: shows only roles with an explicit intern / new-grad / fresher / entry-level signal, and hides senior, staff, PhD-only and experienced roles. Turn off to see all eligible roles.">
           <span className="text-muted text-xs cursor-help underline decoration-dotted">what's this?</span>
         </Tooltip>
@@ -251,11 +251,11 @@ export default function FindJobs() {
       {data?.internshala_search?.search_url && (
         <div className="card p-3 flex items-center justify-between gap-3 border-blue-400/30">
           <div className="text-sm">
-            <span className="font-medium text-blue-300">Search on Internshala</span>
+            <span className="font-medium text-blue-600">Search on Internshala</span>
             <span className="text-muted">{" — "}{data.internshala_search.note}</span>
           </div>
           <a href={data.internshala_search.search_url} target="_blank" rel="noopener noreferrer"
-             className="btn-ghost whitespace-nowrap text-blue-300 border-blue-400/40">
+             className="btn-ghost whitespace-nowrap text-blue-600 border-blue-400/40">
             Search on Internshala ↗
           </a>
         </div>
@@ -283,7 +283,7 @@ export default function FindJobs() {
             </div>
             {data.hidden_ineligible > 0 && (
               <button
-                className="text-xs text-muted hover:text-white underline underline-offset-2"
+                className="text-xs text-muted hover:text-ink underline underline-offset-2"
                 onClick={() => { const v = !showIneligible; setShowIneligible(v); load(tab, false, v); }}
               >
                 {showIneligible
@@ -334,15 +334,15 @@ function EmptyState({ tab, q, data, internshipsOnly, onShowAllInternshipsOff, on
         {/* Explain WHY, using the real filter counts */}
         {hiddenByInternship ? (
           <p className="text-sm text-muted max-w-md mx-auto">
-            The <b className="text-white">Internships &amp; New Grad only</b> filter is on, and{" "}
-            <b className="text-white">{filteredGeneric}</b> eligible role{filteredGeneric === 1 ? "" : "s"}{" "}
+            The <b className="text-ink">Internships &amp; New Grad only</b> filter is on, and{" "}
+            <b className="text-ink">{filteredGeneric}</b> eligible role{filteredGeneric === 1 ? "" : "s"}{" "}
             didn't carry an explicit intern/new-grad signal
             {hiddenBySenior && <> (plus {hiddenIneligible} senior/PhD roles hidden)</>}.
             Internship postings on these sources are bursty — try turning the filter off.
           </p>
         ) : hiddenBySenior ? (
           <p className="text-sm text-muted max-w-md mx-auto">
-            We hid <b className="text-white">{hiddenIneligible}</b> role{hiddenIneligible === 1 ? "" : "s"}{" "}
+            We hid <b className="text-ink">{hiddenIneligible}</b> role{hiddenIneligible === 1 ? "" : "s"}{" "}
             that are above an early-career level (senior / staff / PhD / 3+ yrs). Show them, broaden the
             role, or try a different keyword.
           </p>
@@ -368,7 +368,7 @@ function EmptyState({ tab, q, data, internshipsOnly, onShowAllInternshipsOff, on
       </div>
 
       <p className="text-xs text-muted pt-1">
-        Tip: the <b className="text-white">Internships &amp; New Grad only</b> toggle above the results
+        Tip: the <b className="text-ink">Internships &amp; New Grad only</b> toggle above the results
         controls how strict the filter is.
       </p>
     </div>
@@ -376,7 +376,7 @@ function EmptyState({ tab, q, data, internshipsOnly, onShowAllInternshipsOff, on
 }
 
 function ScoreRing({ score }) {
-  const color = score >= 70 ? "text-success" : score >= 45 ? "text-yellow-400" : "text-muted";
+  const color = score >= 70 ? "text-success" : score >= 45 ? "text-amber-600" : "text-muted";
   return (
     <div className={`shrink-0 text-center ${color}`}>
       <div className="text-2xl font-bold leading-none">{score}</div>
@@ -389,14 +389,14 @@ const TYPE_LABEL = { internship: "Internship", fresher: "Fresher", job: "Full-ti
 const ELIG_STYLE = {
   "Excellent Match": "border-success/60 text-success",
   "Good Match": "border-success/40 text-success",
-  "Possible Match": "border-yellow-500/40 text-yellow-400",
+  "Possible Match": "border-yellow-500/40 text-amber-600",
   "Not Recommended": "border-danger/40 text-danger",
 };
 
 const SIGNAL_STYLE = {
-  Internship: "border-blue-400/50 text-blue-300",
-  "New Grad": "border-purple-400/50 text-purple-300",
-  "Fresher Friendly": "border-teal-400/50 text-teal-300",
+  Internship: "border-blue-400/50 text-blue-600",
+  "New Grad": "border-purple-400/50 text-purple-600",
+  "Fresher Friendly": "border-teal-200 bg-teal-50 text-teal-700",
 };
 
 function EligibilityBadge({ job }) {
@@ -430,7 +430,7 @@ function applySourceLabel(url) {
 
 function JobCard({ job, onApply }) {
   return (
-    <div className="card-elevated p-5 flex flex-col">
+    <div className="card-elevated p-5 flex flex-col lift-hover hover:shadow-lift-l hover:border-brand/40">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold leading-snug">{job.title}</h3>
@@ -443,7 +443,7 @@ function JobCard({ job, onApply }) {
         <EligibilityBadge job={job} />
         <SignalBadge job={job} />
         {job.employment_type && TYPE_LABEL[job.employment_type] && (
-          <span className="badge border-blue-400/40 text-blue-300">{TYPE_LABEL[job.employment_type]}</span>
+          <span className="badge border-blue-400/40 text-blue-600">{TYPE_LABEL[job.employment_type]}</span>
         )}
         {job.location && <Meta icon="📍" text={job.location} />}
         {job.salary_inr && <Meta icon="💰" text={job.salary_inr} />}
@@ -454,7 +454,7 @@ function JobCard({ job, onApply }) {
       </div>
 
       {/* Why matched? — eligibility reasons first, then skill/role match reasons */}
-      <div className="mt-3 rounded-btn bg-input/40 border border-line p-2.5">
+      <div className="mt-3 rounded-[12px] bg-slate-50 border border-edge p-2.5">
         <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Why matched?</div>
         <ul className="space-y-0.5 text-xs">
           {(job.eligibility_reasons?.length ? job.eligibility_reasons : [job.eligibility_reason])
@@ -473,13 +473,13 @@ function JobCard({ job, onApply }) {
         {/* Hybrid apply-mode badge — Auto-Applied (ATS) vs Apply Manually. */}
         <ApplyModeBadge mode={job.application_mode} />
         {/* Apply Source badge — where the application is actually completed. */}
-        <span className="badge border-indigo-400/40 text-indigo-300">{applySourceLabel(job.apply_url)}</span>
+        <span className="badge border-indigo-400/40 text-indigo-600">{applySourceLabel(job.apply_url)}</span>
         {/* Lever/Ashby are Auto-Apply sources that fall back to Assisted Apply
             (captcha-gated). Internshala is NOT auto-apply — it's link-only
             (manual_link_provided), so it just shows "Apply Manually" via the
             ApplyModeBadge above, like Naukri/Indeed/etc. */}
         {ASSISTED_PLATFORMS.includes(job.platform) ? (
-          <span className="badge border-blue-400/40 text-blue-300">Assisted Apply</span>
+          <span className="badge border-blue-400/40 text-blue-600">Assisted Apply</span>
         ) : null}
         <div className="ml-auto">
           {job.applied ? (

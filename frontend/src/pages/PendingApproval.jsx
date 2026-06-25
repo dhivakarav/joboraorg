@@ -10,12 +10,12 @@ export default function PendingApproval() {
           ⏳
         </div>
         {notice && (
-          <div className="badge border-amber-500/40 text-amber-300 w-full justify-center py-2 mb-4 text-xs">
+          <div className="badge border-amber-500/40 text-amber-700 w-full justify-center py-2 mb-4 text-xs">
             {notice}
           </div>
         )}
         <p className="text-sm text-muted leading-relaxed">
-          Your account is <span className="text-white font-medium">pending admin approval</span>.
+          Your account is <span className="text-ink font-medium">pending admin approval</span>.
           You won't be able to access any features until an administrator approves your account.
           Please check back later.
         </p>

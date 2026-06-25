@@ -58,14 +58,14 @@ export default function EvidenceModal({ application, onClose }) {
             <Info label="Submitted at" value={ev.submitted_at ? new Date(ev.submitted_at).toLocaleString() : "—"} />
             <Info label="Confirmation URL" value={
               ev.confirmation_url
-                ? <a className="text-white underline break-all" href={ev.confirmation_url} target="_blank" rel="noreferrer">{ev.confirmation_url}</a>
+                ? <a className="text-ink underline break-all" href={ev.confirmation_url} target="_blank" rel="noreferrer">{ev.confirmation_url}</a>
                 : "—"
             } />
           </div>
 
           {ev.failure_reason && (
             <div className="card p-3 text-sm border-yellow-500/30">
-              <span className="text-yellow-400 font-medium">Reason:</span> {ev.failure_reason}
+              <span className="text-amber-600 font-medium">Reason:</span> {ev.failure_reason}
             </div>
           )}
 

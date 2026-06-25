@@ -60,9 +60,9 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Settings</h1>
         <p className="text-sm text-muted">Manage your profile and password</p>
       </div>
 
@@ -70,7 +70,7 @@ export default function Settings() {
         <h2 className="font-semibold">Job preferences</h2>
         <p className="text-sm text-muted">
           Sets which jobs we show first. {user.seeker_type
-            ? <>Current: <span className="text-white capitalize">{user.seeker_type}</span>.</>
+            ? <>Current: <span className="text-ink capitalize">{user.seeker_type}</span>.</>
             : "Not set yet."}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -84,7 +84,7 @@ export default function Settings() {
               disabled={savingSeeker}
               onClick={() => saveSeeker(o.key)}
               className={`card-elevated px-4 py-3 text-left transition-colors disabled:opacity-50 ${
-                user.seeker_type === o.key ? "border-white" : "hover:border-white/40"
+                user.seeker_type === o.key ? "border-brand" : "hover:border-brand/40"
               }`}
             >
               <div className="font-medium flex items-center gap-2">

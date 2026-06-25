@@ -38,7 +38,7 @@ export default function FeedbackWidget() {
       <button
         onClick={() => setOpen(true)}
         title="Send feedback or report a bug"
-        className="fixed bottom-5 right-5 z-40 rounded-full bg-white text-black text-sm font-medium px-4 py-2.5 shadow-lg hover:bg-white/90"
+        className="fixed bottom-5 right-5 z-40 rounded-full bg-brand text-white text-sm font-medium px-4 py-2.5 shadow-lift-l hover:bg-brand-hover transition-colors"
       >
         💬 Feedback
       </button>
@@ -50,7 +50,7 @@ export default function FeedbackWidget() {
               <button
                 key={k}
                 onClick={() => setKind(k)}
-                className={`badge px-3 py-1.5 ${kind === k ? "bg-white text-black border-white" : "border-line text-muted"}`}
+                className={`badge px-3 py-1.5 ${kind === k ? "bg-brand text-white border-brand" : "border-line text-muted"}`}
               >
                 {k === "bug" ? "🐞 Bug report" : "💡 Feedback"}
               </button>
@@ -63,7 +63,7 @@ export default function FeedbackWidget() {
               <div className="flex gap-1 text-2xl">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button key={n} onClick={() => setRating(n)}
-                          className={n <= rating ? "text-yellow-400" : "text-muted"}>★</button>
+                          className={n <= rating ? "text-amber-600" : "text-muted"}>★</button>
                 ))}
               </div>
             </div>

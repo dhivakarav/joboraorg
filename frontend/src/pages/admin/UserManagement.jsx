@@ -46,9 +46,9 @@ export default function UserManagement() {
   if (!users) return <Spinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">User Management</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">User Management</h1>
         <p className="text-sm text-muted">Approve, suspend, and inspect users</p>
       </div>
 

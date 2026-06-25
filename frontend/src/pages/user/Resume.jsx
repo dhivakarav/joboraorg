@@ -69,9 +69,9 @@ export default function Resume() {
   if (loading) return <Spinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">Resume</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Resume</h1>
         <p className="text-sm text-muted">Upload your PDF resume — we extract your details automatically</p>
       </div>
 

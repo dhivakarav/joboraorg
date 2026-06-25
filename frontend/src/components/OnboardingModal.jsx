@@ -48,7 +48,7 @@ export default function OnboardingModal() {
               key={o.key}
               disabled={busy}
               onClick={() => choose(o.key)}
-              className="card-elevated p-4 text-left hover:border-white transition-colors flex items-center gap-4 disabled:opacity-50"
+              className="card-elevated p-4 text-left hover:border-brand transition-colors flex items-center gap-4 disabled:opacity-50"
             >
               <span className="text-2xl">{o.emoji}</span>
               <span>

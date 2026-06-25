@@ -47,9 +47,9 @@ export default function ActivityLog() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">Activity Log</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Activity Log</h1>
         <p className="text-sm text-muted">Track every application through its lifecycle</p>
       </div>
 
@@ -104,7 +104,7 @@ export default function ActivityLog() {
                         <ApplyModeBadge mode={r.application_mode} />
                         {r.application_mode === "manual_link_provided" && r.apply_url && (
                           <a href={r.apply_url} target="_blank" rel="noopener noreferrer"
-                             className="text-white underline underline-offset-2 hover:text-muted text-xs whitespace-nowrap">
+                             className="text-ink underline underline-offset-2 hover:text-muted text-xs whitespace-nowrap">
                             Open Job ↗
                           </a>
                         )}

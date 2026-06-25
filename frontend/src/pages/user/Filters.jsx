@@ -46,9 +46,9 @@ export default function Filters() {
   if (!f) return <Spinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">Filters</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Filters</h1>
         <p className="text-sm text-muted">Tell Jobora exactly which jobs to target</p>
       </div>
 
@@ -72,7 +72,7 @@ export default function Filters() {
                 type="button"
                 onClick={() => toggleIn("locations", loc)}
                 className={`badge px-3 py-1.5 ${
-                  f.locations.includes(loc) ? "bg-white text-black border-white" : "border-line text-muted"
+                  f.locations.includes(loc) ? "bg-brand text-white border-brand" : "border-line text-muted"
                 }`}
               >
                 {loc}
@@ -90,7 +90,7 @@ export default function Filters() {
                 type="button"
                 onClick={() => toggleIn("job_types", t)}
                 className={`badge px-3 py-1.5 ${
-                  f.job_types.includes(t) ? "bg-white text-black border-white" : "border-line text-muted"
+                  f.job_types.includes(t) ? "bg-brand text-white border-brand" : "border-line text-muted"
                 }`}
               >
                 {t}
@@ -101,7 +101,7 @@ export default function Filters() {
 
         <div>
           <label className="label">
-            Daily application limit — <span className="text-white">{f.daily_limit}/day</span>
+            Daily application limit — <span className="text-ink">{f.daily_limit}/day</span>
           </label>
           <input
             type="range"
@@ -110,7 +110,7 @@ export default function Filters() {
             step="1"
             value={f.daily_limit}
             onChange={(e) => set("daily_limit", e.target.value)}
-            className="w-full accent-white"
+            className="w-full accent-[#2563EB]"
           />
           <div className="flex justify-between text-xs text-muted mt-1">
             <span>5</span>
@@ -120,7 +120,7 @@ export default function Filters() {
 
         <div>
           <label className="label">
-            Minimum resume match score — <span className="text-white">{f.min_match_score ?? 50}%</span>
+            Minimum resume match score — <span className="text-ink">{f.min_match_score ?? 50}%</span>
           </label>
           <input
             type="range"
@@ -129,7 +129,7 @@ export default function Filters() {
             step="5"
             value={f.min_match_score ?? 50}
             onChange={(e) => set("min_match_score", e.target.value)}
-            className="w-full accent-white"
+            className="w-full accent-[#2563EB]"
           />
           <div className="flex justify-between text-xs text-muted mt-1">
             <span>0% (show all)</span>

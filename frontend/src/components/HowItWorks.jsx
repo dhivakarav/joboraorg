@@ -25,7 +25,7 @@ export default function HowItWorks() {
   return (
     <div className="card-elevated p-5 relative">
       <button onClick={close}
-              className="absolute top-3 right-3 text-muted hover:text-white text-lg leading-none"
+              className="absolute top-3 right-3 text-muted hover:text-ink text-lg leading-none"
               aria-label="Dismiss">×</button>
       <h2 className="font-semibold mb-1">Welcome to Jobora 👋</h2>
       <p className="text-sm text-muted mb-4">How it works — honest job tracking for students.</p>

@@ -79,7 +79,7 @@ export default function AssistedApplyWizard({ job, onClose, onDone }) {
               <div className="font-semibold">{job.title}</div>
               <div className="text-sm text-muted">{job.company}</div>
             </div>
-            <span className="badge border-blue-400/40 text-blue-300">{prep.platform} · Assisted</span>
+            <span className="badge border-blue-400/40 text-blue-600">{prep.platform} · Assisted</span>
           </div>
 
           <Stepper step={step} />
@@ -89,7 +89,7 @@ export default function AssistedApplyWizard({ job, onClose, onDone }) {
               {/* Resume being used */}
               <Row label="Resume">
                 {prep.resume_filename
-                  ? <span className="text-white">📄 {prep.resume_filename}</span>
+                  ? <span className="text-ink">📄 {prep.resume_filename}</span>
                   : <span className="text-danger">No resume — upload one first</span>}
               </Row>
 
@@ -100,7 +100,7 @@ export default function AssistedApplyWizard({ job, onClose, onDone }) {
                   {prep.required_fields.map((f) => (
                     <div key={f.label} className="flex items-center justify-between px-3 py-2 text-sm">
                       <span className="text-muted">{f.label}{f.required && " *"}</span>
-                      <span className={f.value ? "text-white" : "text-muted/60"}>
+                      <span className={f.value ? "text-ink" : "text-muted/60"}>
                         {f.value || (f.required ? "— add on portal" : "—")}
                       </span>
                     </div>
@@ -110,7 +110,7 @@ export default function AssistedApplyWizard({ job, onClose, onDone }) {
 
               {/* Screening questions note */}
               <div className="card p-3 text-sm border-yellow-500/30">
-                <div className="text-yellow-400 font-medium mb-1">Screening questions</div>
+                <div className="text-amber-600 font-medium mb-1">Screening questions</div>
                 {prep.screening_note}
               </div>
 
@@ -150,7 +150,7 @@ export default function AssistedApplyWizard({ job, onClose, onDone }) {
                 </div>
                 <p className="text-xs text-muted">
                   Verified Submitted needs all three: reference ID + confirmation URL + screenshot.
-                  Otherwise it's recorded as <b className="text-white">Submitted</b>.
+                  Otherwise it's recorded as <b className="text-ink">Submitted</b>.
                 </p>
                 <button className="btn-primary w-full" disabled={busy} onClick={record}>
                   {busy ? "Saving…" : "Save & verify"}
@@ -164,7 +164,7 @@ export default function AssistedApplyWizard({ job, onClose, onDone }) {
                     <StatusBadge status={result.display_status} />
                   </div>
                   {result.missing?.length > 0 && (
-                    <div className="text-xs text-yellow-400">
+                    <div className="text-xs text-amber-600">
                       Missing for full verification: {result.missing.join(", ")}
                     </div>
                   )}
@@ -188,7 +188,7 @@ function Stepper({ step }) {
     <div className="flex gap-2 text-xs">
       {steps.map((s, i) => (
         <span key={s}
-              className={`badge ${step >= i + 1 ? "bg-white text-black border-white" : "border-line text-muted"}`}>
+              className={`badge ${step >= i + 1 ? "bg-brand text-white border-brand" : "border-line text-muted"}`}>
           {i + 1}. {s}
         </span>
       ))}

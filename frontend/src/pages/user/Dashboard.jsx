@@ -118,11 +118,11 @@ export default function Dashboard() {
   if (!stats) return <Spinner />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-fade-up">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted">Overview of your real job-application activity</p>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Dashboard</h1>
+          <p className="mt-0.5 text-sm text-ink-soft">Overview of your real job-application activity</p>
         </div>
         {running ? (
           <button className="btn-danger" onClick={stop}>
@@ -145,17 +145,17 @@ export default function Dashboard() {
 
       {/* Approval gate — auto-apply jobs are NEVER submitted without explicit confirmation. */}
       {pending && pending.items.length > 0 && (
-        <div className="card p-5 space-y-3 border-amber-400/40">
+        <div className="card p-5 space-y-3 border-amber-200 bg-amber-50/40">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h2 className="font-semibold text-amber-300">
+              <h2 className="font-semibold text-amber-700">
                 {pending.items.length} application(s) awaiting your approval
               </h2>
               <p className="text-xs text-muted">
                 Nothing has been submitted. Review and confirm to apply.
-                {" "}Resume: <span className="text-white">{pending.resume_version}</span>.
+                {" "}Resume: <span className="text-ink">{pending.resume_version}</span>.
                 {!pending.live_ready && (
-                  <span className="text-yellow-400"> · Live mode is OFF — approving will mark these
+                  <span className="text-amber-600"> · Live mode is OFF — approving will mark these
                     “Manual Apply Required”, not submit them.</span>
                 )}
               </p>
@@ -164,7 +164,7 @@ export default function Dashboard() {
                 list at once, so it must look distinct from the per-job Confirm and
                 require an explicit extra confirmation. */}
             <button
-              className="btn-ghost whitespace-nowrap border-amber-500/50 text-amber-300"
+              className="btn-ghost whitespace-nowrap border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
               onClick={() => {
                 const n = pending.items.length;
                 if (window.confirm(
@@ -180,7 +180,7 @@ export default function Dashboard() {
               <div key={j.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                 <div className="min-w-0">
                   <div className="truncate">
-                    <span className="text-white">About to apply to:</span> {j.job_title}
+                    <span className="text-ink">About to apply to:</span> {j.job_title}
                     {" "}<span className="text-muted">at {j.company}</span>
                   </div>
                   <div className="text-xs text-muted">
@@ -200,9 +200,9 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatCard label="Verified Submitted" value={stats.verified_submitted} accent="text-success" />
-        <StatCard label="Submitted" value={stats.submitted} accent="text-blue-300" />
-        <StatCard label="Manual Apply" value={stats.manual_apply} accent="text-yellow-400" />
-        <StatCard label="Tracked" value={stats.tracked} accent="text-blue-300" />
+        <StatCard label="Submitted" value={stats.submitted} accent="text-blue-600" />
+        <StatCard label="Manual Apply" value={stats.manual_apply} accent="text-amber-600" />
+        <StatCard label="Tracked" value={stats.tracked} accent="text-blue-600" />
         <StatCard label="Total" value={stats.total} />
       </div>
 
@@ -225,9 +225,9 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <StatCard label="Jobs discovered" value={analytics.jobs_discovered} />
-            <StatCard label="Internships" value={analytics.internships} accent="text-blue-300" />
-            <StatCard label="Freshers" value={analytics.freshers} accent="text-blue-300" />
-            <StatCard label="AI/ML jobs" value={analytics.ai_ml} accent="text-purple-300" />
+            <StatCard label="Internships" value={analytics.internships} accent="text-blue-600" />
+            <StatCard label="Freshers" value={analytics.freshers} accent="text-blue-600" />
+            <StatCard label="AI/ML jobs" value={analytics.ai_ml} accent="text-purple-600" />
             <StatCard label="Coverage" value={`${analytics.coverage_percentage}%`} accent="text-success" />
           </div>
           {analytics.by_source && (
@@ -246,22 +246,22 @@ export default function Dashboard() {
             {running && <span className="h-2 w-2 rounded-full bg-success animate-pulse" />}
             <h2 className="font-semibold">Live activity {running ? "(running)" : ""}</h2>
           </div>
-          <div className="max-h-60 overflow-y-auto rounded-btn bg-input border border-inputline p-3 font-mono text-xs space-y-1">
+          <div className="max-h-60 overflow-y-auto rounded-[12px] bg-slate-50 border border-edge p-3 font-mono text-xs space-y-1">
             {log.map((e, i) => (
               <div key={i} className="text-muted">
                 {e.type === "log" ? (
                   <span>
-                    <span className="text-white">[{e.portal}]</span> {e.job_title} @ {e.company} —{" "}
+                    <span className="text-ink">[{e.portal}]</span> {e.job_title} @ {e.company} —{" "}
                     <span
                       className={
                         e.status === "Verified Submitted"
                           ? "text-success"
                           : e.status === "Tracked" || e.status === "Submitted" || e.status === "Saved"
-                          ? "text-blue-300"
+                          ? "text-blue-600"
                           : e.status === "Failed"
                           ? "text-danger"
                           : e.status === "Manual Apply"
-                          ? "text-yellow-400"
+                          ? "text-amber-600"
                           : ""
                       }
                     >
@@ -282,8 +282,8 @@ export default function Dashboard() {
         <h2 className="font-semibold mb-4">Recent activity</h2>
         {stats.recent_activity.length === 0 ? (
           <p className="text-sm text-muted py-6 text-center">
-            No activity yet. Browse <b className="text-white">Find Jobs</b> or hit{" "}
-            <b className="text-white">Scan &amp; Track Matches</b>.
+            No activity yet. Browse <b className="text-ink">Find Jobs</b> or hit{" "}
+            <b className="text-ink">Scan &amp; Track Matches</b>.
           </p>
         ) : (
           <Table rows={stats.recent_activity} />
@@ -309,13 +309,13 @@ function GettingStarted({ seekerSet, hasResume, hasApplied }) {
         <h2 className="font-semibold">Getting started</h2>
         <span className="text-sm text-muted">{done}/{steps.length} complete</span>
       </div>
-      <div className="h-2 w-full rounded-full bg-input overflow-hidden mb-4">
-        <div className="h-full bg-white transition-all" style={{ width: `${pct}%` }} />
+      <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden mb-4">
+        <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${pct}%` }} />
       </div>
       <div className="space-y-2">
         {steps.map((s) => (
           <div key={s.label} className="flex items-center justify-between text-sm">
-            <span className={s.done ? "text-muted line-through" : "text-white"}>
+            <span className={s.done ? "text-muted line-through" : "text-ink"}>
               {s.done ? "✓" : "○"} {s.label}
             </span>
             {!s.done && (

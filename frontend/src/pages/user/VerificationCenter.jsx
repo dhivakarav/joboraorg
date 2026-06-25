@@ -40,11 +40,11 @@ export default function VerificationCenter() {
   const manualCount = rows.filter((r) => r.display_status === "Manual Apply").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">Verification Center</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Verification Center</h1>
         <p className="text-sm text-muted">
-          Proof of every submission — only <b className="text-white">Verified Submitted</b> means a
+          Proof of every submission — only <b className="text-ink">Verified Submitted</b> means a
           confirmation, application ID, and screenshot are all on file.
         </p>
       </div>
@@ -52,12 +52,12 @@ export default function VerificationCenter() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="Verified Submitted" value={verifiedCount} accent="text-success" />
         <Stat label="Submission attempts" value={attemptCount} />
-        <Stat label="Manual apply (not submitted)" value={manualCount} accent="text-yellow-400" />
+        <Stat label="Manual apply (not submitted)" value={manualCount} accent="text-amber-600" />
         <Stat label="Total applications" value={rows.length} />
       </div>
 
       <label className="flex items-center gap-2 text-sm w-fit cursor-pointer">
-        <input type="checkbox" className="accent-white h-4 w-4"
+        <input type="checkbox" className="accent-[#2563EB] h-4 w-4"
                checked={onlyVerified} onChange={(e) => setOnlyVerified(e.target.checked)} />
         Show only Verified Submitted
       </label>
@@ -65,9 +65,9 @@ export default function VerificationCenter() {
       <div className="card p-5">
         {items.length === 0 ? (
           <p className="text-sm text-muted py-8 text-center">
-            No submission attempts yet. Apply to a role from <b className="text-white">Find Jobs</b>.
+            No submission attempts yet. Apply to a role from <b className="text-ink">Find Jobs</b>.
             Auto-Apply sources whose forms are captcha-gated (Lever/Ashby) fall back to{" "}
-            <b className="text-white">Assisted Apply</b> — Jobora prefills the form, you complete the
+            <b className="text-ink">Assisted Apply</b> — Jobora prefills the form, you complete the
             captcha and submit, then record your confirmation here.
           </p>
         ) : (
@@ -99,7 +99,7 @@ export default function VerificationCenter() {
                     <td className="py-2.5 pr-3">
                       {r.confirmation_url
                         ? <a href={r.confirmation_url} target="_blank" rel="noreferrer"
-                             className="text-white underline underline-offset-2 break-all">Open ↗</a>
+                             className="text-ink underline underline-offset-2 break-all">Open ↗</a>
                         : "—"}
                     </td>
                     <td className="py-2.5 pr-3 text-muted whitespace-nowrap">
@@ -125,7 +125,7 @@ function Stat({ label, value, accent }) {
   return (
     <div className="card-elevated p-4">
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${accent || "text-white"}`}>{value}</div>
+      <div className={`mt-1 text-2xl font-bold ${accent || "text-ink"}`}>{value}</div>
     </div>
   );
 }

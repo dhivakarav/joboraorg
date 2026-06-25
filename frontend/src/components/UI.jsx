@@ -1,5 +1,6 @@
 // Shared presentational primitives used across the app.
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 // ---------- Toast ----------
 const ToastCtx = createContext(null);
@@ -15,20 +16,27 @@ export function ToastProvider({ children }) {
     <ToastCtx.Provider value={push}>
       {children}
       <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`card-elevated px-4 py-3 text-sm max-w-xs ${
-              t.type === "error"
-                ? "border-danger/50"
-                : t.type === "success"
-                ? "border-success/50"
-                : ""
-            }`}
-          >
-            {t.message}
-          </div>
-        ))}
+        <AnimatePresence>
+          {toasts.map((t) => (
+            <motion.div
+              key={t.id}
+              layout
+              initial={{ opacity: 0, x: 40, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 40, scale: 0.96 }}
+              transition={{ type: "spring", stiffness: 360, damping: 30 }}
+              className={`card-elevated max-w-xs px-4 py-3 text-sm text-ink ${
+                t.type === "error"
+                  ? "border-l-4 border-l-err"
+                  : t.type === "success"
+                  ? "border-l-4 border-l-ok"
+                  : "border-l-4 border-l-brand"
+              }`}
+            >
+              {t.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </ToastCtx.Provider>
   );
@@ -40,25 +48,33 @@ export function useToast() {
 
 // ---------- Modal ----------
 export function Modal({ open, onClose, title, children, width = "max-w-md" }) {
-  if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onMouseDown={onClose}
-    >
-      <div
-        className={`card-elevated w-full ${width} p-6 max-h-[90vh] overflow-y-auto`}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-muted hover:text-white text-xl leading-none">
-            ×
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm"
+          onMouseDown={onClose}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className={`card-elevated w-full ${width} max-h-[90vh] overflow-y-auto p-6`}
+            onMouseDown={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 8 }}
+            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-ink">{title}</h3>
+              <button onClick={onClose} className="text-xl leading-none text-ink-soft transition-colors hover:text-ink">
+                ×
+              </button>
+            </div>
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -69,12 +85,12 @@ export function Toggle({ checked, onChange }) {
       type="button"
       onClick={() => onChange(!checked)}
       className={`relative h-6 w-11 rounded-full transition-colors ${
-        checked ? "bg-white" : "bg-inputline"
+        checked ? "bg-brand" : "bg-slate-200"
       }`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full transition-transform ${
-          checked ? "translate-x-[22px] bg-black" : "translate-x-0.5 bg-white"
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-[22px]" : "translate-x-0.5"
         }`}
       />
     </button>
@@ -86,44 +102,52 @@ export function Toggle({ checked, onChange }) {
 // (only "Verified Submitted" signals a confirmed, evidenced auto-submission).
 // Applied / Interview / Offer / Rejected are SELF-REPORTED pipeline stages a
 // user sets by hand — automation never emits them.
+const OK = "border-green-200 bg-green-50 text-green-700";
+const BLUE = "border-blue-200 bg-blue-50 text-blue-700";
+const AMBER = "border-amber-200 bg-amber-50 text-amber-700";
+const PURPLE = "border-purple-200 bg-purple-50 text-purple-700";
+const EMERALD = "border-emerald-200 bg-emerald-50 text-emerald-700";
+const RED = "border-red-200 bg-red-50 text-red-700";
+const NEUTRAL = "border-edge bg-canvas text-ink-soft";
+
 const STATUS_STYLE = {
   // canonical application statuses
-  "Verified Submitted": "border-success/60 text-success",
-  Submitted: "border-blue-400/50 text-blue-300",
-  "Submitted (Unverified)": "border-muted/50 text-muted",
-  Tracked: "border-blue-400/40 text-blue-300",
-  "Manual Apply": "border-yellow-500/40 text-yellow-400",
-  "Pending Approval": "border-amber-400/60 text-amber-300",
-  Draft: "border-line text-muted",
-  Failed: "border-danger/40 text-danger",
-  "Failed — No Confirmation": "border-danger/40 text-danger",
-  "Failed — Form Not Found": "border-danger/40 text-danger",
-  "Failed — Submit Not Found": "border-danger/40 text-danger",
+  "Verified Submitted": OK,
+  Submitted: BLUE,
+  "Submitted (Unverified)": NEUTRAL,
+  Tracked: BLUE,
+  "Manual Apply": AMBER,
+  "Pending Approval": AMBER,
+  Draft: NEUTRAL,
+  Failed: RED,
+  "Failed — No Confirmation": RED,
+  "Failed — Form Not Found": RED,
+  "Failed — Submit Not Found": RED,
   // self-reported pipeline stages
-  Applied: "border-blue-400/50 text-blue-300",
-  Interview: "border-purple-400/50 text-purple-300",
-  Offer: "border-emerald-400/60 text-emerald-300",
-  Rejected: "border-danger/40 text-danger",
+  Applied: BLUE,
+  Interview: PURPLE,
+  Offer: EMERALD,
+  Rejected: RED,
   // other (portal/user/admin) labels still used around the app
-  Saved: "border-line text-muted",
-  Skipped: "border-muted/40 text-muted",
-  Ready: "border-blue-400/40 text-blue-300",
-  Queued: "border-blue-400/40 text-blue-300",
-  Processing: "border-blue-400/40 text-blue-300",
-  "CAPTCHA Required": "border-yellow-500/40 text-yellow-400",
-  "Manual Apply Required": "border-yellow-500/40 text-yellow-400",
-  approved: "border-success/40 text-success",
-  Connected: "border-success/40 text-success",
-  Pending: "border-yellow-500/40 text-yellow-400",
-  pending: "border-yellow-500/40 text-yellow-400",
-  "Setup Needed": "border-yellow-500/40 text-yellow-400",
-  suspended: "border-danger/40 text-danger",
+  Saved: NEUTRAL,
+  Skipped: NEUTRAL,
+  Ready: BLUE,
+  Queued: BLUE,
+  Processing: BLUE,
+  "CAPTCHA Required": AMBER,
+  "Manual Apply Required": AMBER,
+  approved: OK,
+  Connected: OK,
+  Pending: AMBER,
+  pending: AMBER,
+  "Setup Needed": AMBER,
+  suspended: RED,
 };
 
 export function StatusBadge({ status }) {
   const s = status || "Draft";
   const label = s.charAt(0).toUpperCase() + s.slice(1);
-  return <span className={`badge ${STATUS_STYLE[s] || "border-line text-muted"}`}>{label}</span>;
+  return <span className={`badge ${STATUS_STYLE[s] || NEUTRAL}`}>{label}</span>;
 }
 
 // Hybrid apply-mode badge: green "Auto-Applied" (ATS public apply path) vs blue
@@ -131,7 +155,7 @@ export function StatusBadge({ status }) {
 export function ApplyModeBadge({ mode }) {
   const auto = mode === "auto_applied";
   return (
-    <span className={`badge ${auto ? "border-success/50 text-success" : "border-blue-400/50 text-blue-300"}`}>
+    <span className={`badge ${auto ? OK : BLUE}`}>
       {auto ? "Auto-Applied" : "Apply Manually"}
     </span>
   );
@@ -146,14 +170,14 @@ export function ApplyModeBadge({ mode }) {
 export function EvidenceCell({ row, onView }) {
   const ds = row.display_status;
   const hasEvidence = !!row.evidence_available || !!row.confirmation_url;
-  const link = "text-white underline underline-offset-2 hover:text-muted";
+  const link = "font-medium text-brand underline-offset-2 hover:underline";
   if ((ds === "Submitted" || ds === "Verified Submitted") && hasEvidence) {
     return <button onClick={() => onView(row)} className={link}>View</button>;
   }
   if ((ds === "Tracked" || ds === "Manual Apply") && row.apply_url) {
     return <a href={row.apply_url} target="_blank" rel="noopener noreferrer" className={link}>Open ↗</a>;
   }
-  return <span className="text-muted">—</span>;
+  return <span className="text-ink-soft">—</span>;
 }
 
 // ---------- Tooltip (hover on desktop, tap-to-toggle on mobile) ----------
@@ -167,7 +191,7 @@ export function Tooltip({ text, children }) {
     return () => { clearTimeout(id); document.removeEventListener("click", close); };
   }, [open]);
   return (
-    <span className="relative inline-flex group">
+    <span className="group relative inline-flex">
       <span
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         className="inline-flex"
@@ -176,9 +200,9 @@ export function Tooltip({ text, children }) {
       </span>
       <span
         role="tooltip"
-        className={`pointer-events-none absolute left-1/2 bottom-full z-50 mb-2 -translate-x-1/2
-                   w-56 rounded-btn border border-line bg-elevated px-3 py-2 text-xs text-white
-                   shadow-glossylg group-hover:block ${open ? "block" : "hidden"}`}
+        className={`pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2
+                   rounded-[12px] bg-ink px-3 py-2 text-xs text-white
+                   shadow-lift-l group-hover:block ${open ? "block" : "hidden"}`}
       >
         {text}
       </span>
@@ -190,8 +214,8 @@ export function Tooltip({ text, children }) {
 export function StatCard({ label, value, accent }) {
   return (
     <div className="card-elevated p-5">
-      <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-2 text-3xl font-bold ${accent || "text-white"}`}>{value}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-ink-soft">{label}</div>
+      <div className={`mt-2 text-3xl font-bold tracking-tight ${accent || "text-ink"}`}>{value}</div>
     </div>
   );
 }
@@ -230,7 +254,7 @@ export function PillInput({ values, onChange, placeholder }) {
               {v}
               <button
                 onClick={() => onChange(values.filter((x) => x !== v))}
-                className="text-muted hover:text-danger"
+                className="text-ink-soft hover:text-err"
               >
                 ×
               </button>
@@ -245,19 +269,19 @@ export function PillInput({ values, onChange, placeholder }) {
 export function Spinner() {
   return (
     <div className="flex items-center justify-center py-20">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-white" />
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-edge border-t-brand" />
     </div>
   );
 }
 
 // Skeleton primitives for loading states.
 export function Skeleton({ className = "" }) {
-  return <div className={`animate-pulse rounded bg-elevated ${className}`} />;
+  return <div className={`animate-pulse rounded bg-slate-100 ${className}`} />;
 }
 
 export function JobCardSkeleton() {
   return (
-    <div className="card-elevated p-5 space-y-3">
+    <div className="card-elevated space-y-3 p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 space-y-2">
           <Skeleton className="h-4 w-3/4" />
@@ -272,7 +296,7 @@ export function JobCardSkeleton() {
       <Skeleton className="h-16 w-full" />
       <div className="flex items-center gap-2 pt-2">
         <Skeleton className="h-5 w-28" />
-        <Skeleton className="h-8 w-24 ml-auto" />
+        <Skeleton className="ml-auto h-8 w-24" />
       </div>
     </div>
   );

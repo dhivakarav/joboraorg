@@ -88,7 +88,7 @@ export default function ResetPassword() {
             {busy ? "Updating…" : "Update password"}
           </button>
           <p className="text-center text-sm text-muted">
-            <Link to="/login" className="text-white underline underline-offset-4">
+            <Link to="/login" className="text-ink underline underline-offset-4">
               Back to sign in
             </Link>
           </p>

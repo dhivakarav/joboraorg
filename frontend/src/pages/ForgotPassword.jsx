@@ -67,7 +67,7 @@ export default function ForgotPassword() {
           </button>
           <p className="text-center text-sm text-muted">
             Remembered it?{" "}
-            <Link to="/login" className="text-white underline underline-offset-4">
+            <Link to="/login" className="text-ink underline underline-offset-4">
               Sign in
             </Link>
           </p>

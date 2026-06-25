@@ -4,62 +4,218 @@
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
   body {
-    @apply bg-bg text-white font-sans antialiased;
+    @apply bg-canvas text-ink font-sans antialiased;
     margin: 0;
   }
-  /* Scrollbar — keep it monochrome to match the theme. */
+  /* Scrollbar — light, subtle. */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   ::-webkit-scrollbar-track {
-    background: #0a0a0a;
+    background: #F1F5F9;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a2a2a;
+    background: #CBD5E1;
     border-radius: 8px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3a3a3a;
+    background: #94A3B8;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-surface border border-line rounded-card shadow-glossy;
+    @apply bg-white border border-edge rounded-[20px] shadow-card-l;
   }
   .card-elevated {
-    @apply bg-elevated border border-line rounded-card shadow-glossylg;
+    @apply bg-white border border-edge rounded-[20px] shadow-lift-l;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-[12px] px-4 py-2.5 text-sm font-semibold transition-[background-color,box-shadow,transform,border-color] duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  /* Primary CTA: white bg, black text. */
+  /* Primary CTA: brand blue. */
   .btn-primary {
-    @apply btn bg-white text-black hover:bg-[#e0e0e0];
+    @apply btn bg-brand text-white hover:bg-brand-hover hover:shadow-glow-l;
   }
   .btn-ghost {
-    @apply btn border border-line text-white hover:bg-elevated;
+    @apply btn border border-edge bg-white text-ink hover:bg-canvas;
   }
   .btn-danger {
-    @apply btn bg-danger text-white hover:opacity-90;
+    @apply btn bg-err text-white hover:opacity-90;
   }
   .btn-success {
-    @apply btn bg-success text-black hover:opacity-90;
+    @apply btn bg-ok text-white hover:opacity-90;
   }
   .input {
-    @apply w-full rounded-btn bg-input border border-inputline text-white px-3 py-2 text-sm placeholder-muted outline-none focus:border-white transition-colors;
+    @apply w-full rounded-[12px] bg-white border border-edge text-ink px-3.5 py-2.5 text-sm placeholder-ink-soft/70 outline-none transition-[border-color,box-shadow] duration-200 focus:border-brand focus:shadow-[0_0_0_4px_rgba(37,99,235,0.12)];
   }
   .label {
-    @apply block text-xs font-medium text-muted mb-1.5;
+    @apply block text-[13px] font-medium text-ink-soft mb-1.5;
   }
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border;
   }
   .pill {
-    @apply inline-flex items-center gap-1.5 rounded-full bg-elevated border border-line px-3 py-1 text-sm;
+    @apply inline-flex items-center gap-1.5 rounded-full bg-white border border-edge px-3 py-1 text-sm text-ink;
   }
+}
+
+/* ===== Premium UI primitives (opt-in; used by redesigned screens only) =====
+   Adding NEW classes/keyframes here does not affect existing screens — they
+   only apply where explicitly used. */
+@layer components {
+  /* Glassmorphic panel — translucent surface + blur + glossy edge + soft shadow */
+  .glass {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 24px 70px -24px rgba(0, 0, 0, 0.8);
+  }
+  /* Premium input focus glow (opt-in; does not alter the base .input) */
+  .input-glow {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+  .input-glow:focus {
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07);
+  }
+  /* CTA with lift + press micro-interactions (opt-in modifier) */
+  .btn-lift {
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease, background-color 0.18s ease;
+  }
+  .btn-lift:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 34px -10px rgba(255, 255, 255, 0.45);
+  }
+  .btn-lift:active:not(:disabled) {
+    transform: translateY(0) scale(0.99);
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spotlight-drift {
+  0%   { transform: translate3d(-4%, -3%, 0) scale(1); }
+  50%  { transform: translate3d(4%, 3%, 0) scale(1.12); }
+  100% { transform: translate3d(-4%, -3%, 0) scale(1); }
+}
+@keyframes shake-x {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-3px); }
+  40%, 60% { transform: translateX(3px); }
+}
+
+@layer utilities {
+  .animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-spotlight { animation: spotlight-drift 20s ease-in-out infinite; }
+  .animate-shake { animation: shake-x 0.4s ease-in-out; }
+  .delay-1 { animation-delay: 0.06s; }
+  .delay-2 { animation-delay: 0.12s; }
+  .delay-3 { animation-delay: 0.18s; }
+  .delay-4 { animation-delay: 0.24s; }
+  .delay-5 { animation-delay: 0.30s; }
+  .delay-6 { animation-delay: 0.36s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up, .animate-spotlight, .animate-shake { animation: none !important; }
+}
+
+/* ===== Login experience primitives (opt-in) ===== */
+@keyframes gradient-pan { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+
+/* Continuously panning monochrome sheen for the primary CTA (on-brand B&W) */
+.btn-ai-gradient {
+  background-image: linear-gradient(110deg, #ffffff 0%, #cfcfcf 22%, #ffffff 45%, #cfcfcf 68%, #ffffff 100%);
+  background-size: 220% 100%;
+  animation: gradient-pan 5.5s linear infinite;
+}
+
+/* Cursor-following highlight border for inputs (set --mx/--my from JS) */
+.cursor-border { position: relative; }
+.cursor-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(130px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.75), rgba(255,255,255,0.06) 60%, transparent 75%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.cursor-border:hover::before,
+.cursor-border:focus-within::before { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-ai-gradient { animation: none !important; }
+}
+
+/* ===== Design-system motion primitives (Alpy-grade, opt-in) ===== */
+@keyframes ripple {
+  from { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+  to   { transform: translate(-50%, -50%) scale(34); opacity: 0; }
+}
+
+/* Lenis smooth-scroll baseline */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+/* Electric-blue focus ring variant (used sparingly on inputs) */
+.accent-glow { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.accent-glow:focus-within {
+  border-color: rgba(79, 126, 255, 0.65) !important;
+  box-shadow: 0 0 0 3px rgba(79, 126, 255, 0.18) !important;
+}
+
+/* Premium hover lift for cards (opt-in) */
+.lift-hover {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.lift-hover:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--tw-shadow, 0 24px 60px -20px rgba(0,0,0,0.75));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lift-hover:hover { transform: none; }
+}
+
+/* ===== LIGHT SaaS design system (white redesign) — namespaced l-* so the
+   not-yet-converted dark screens keep working until each is migrated. ===== */
+@layer components {
+  .l-card {
+    @apply bg-white border border-edge rounded-[20px] shadow-card-l;
+  }
+  .l-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-[14px] px-4 py-2.5 text-sm font-semibold transition-[transform,box-shadow,background-color] duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .l-btn-primary { @apply l-btn bg-brand text-white hover:bg-brand-hover; }
+  .l-btn-ghost   { @apply l-btn border border-edge bg-white text-ink hover:bg-canvas; }
+  .l-input {
+    @apply w-full rounded-[14px] bg-white border border-edge text-ink px-3.5 py-2.5 text-sm placeholder-ink-soft/70 outline-none transition-[border-color,box-shadow] duration-200;
+  }
+  .l-input:focus { border-color: #2563EB; box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+  .l-label { @apply block text-[13px] font-medium text-ink-soft mb-1.5; }
+  .l-chip  { @apply inline-flex items-center gap-1 rounded-full border border-edge bg-white px-2.5 py-0.5 text-xs font-medium text-ink-soft; }
+}
+
+/* Blue focus ring for wrapped fields (light) */
+.brand-glow:focus-within {
+  border-color: rgba(37, 99, 235, 0.65) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14) !important;
 }

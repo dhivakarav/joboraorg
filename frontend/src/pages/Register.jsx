@@ -75,7 +75,7 @@ export default function Register() {
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         Already registered?{" "}
-        <Link to="/login" className="text-white underline underline-offset-4">
+        <Link to="/login" className="text-ink underline underline-offset-4">
           Sign in
         </Link>
       </p>

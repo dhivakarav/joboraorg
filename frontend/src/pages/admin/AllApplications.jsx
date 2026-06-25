@@ -30,9 +30,9 @@ export default function AllApplications() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-bold">All Applications</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink">All Applications</h1>
         <p className="text-sm text-muted">Every application across all users</p>
       </div>
 
