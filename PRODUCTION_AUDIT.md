@@ -19,8 +19,8 @@ Legend: **CRITICAL** = blocks any public exposure · **HIGH** = fix before beta 
 - Fix: refuse to boot if `JWT_SECRET`/`CREDENTIAL_KEY` are unset/default in
   non-dev; never commit a real key.
 
-**C2. Hardcoded admin account** — `config.py` `ADMIN_EMAIL=admin@jobapplier.com`,
-`ADMIN_PASSWORD=Admin@123`, seeded on every boot.
+**C2. Hardcoded admin account** — `config.py` `ADMIN_EMAIL=<ADMIN_EMAIL>`,
+`ADMIN_PASSWORD=<ADMIN_PASSWORD>`, seeded on every boot.
 - A known, public admin credential = full takeover. Fix: require admin creds
   from env; force change on first login; don't ship a default password.
 

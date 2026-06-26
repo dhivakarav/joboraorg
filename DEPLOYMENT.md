@@ -39,7 +39,7 @@ SPA (static).
      (e.g. `https://jobara-web.onrender.com`), `APP_BASE_URL` = same, plus `SMTP_*`.
    - **jobara-web:** `VITE_API_BASE_URL` = `https://jobara-api.onrender.com/api`.
 5. Deploy. The API healthchecks `/api/health`; migrations run on boot.
-6. Visit the `jobara-web` URL. Log in as `admin@jobapplier.com` / `Admin@123` and
+6. Visit the `jobara-web` URL. Log in as `<ADMIN_EMAIL>` / `<ADMIN_PASSWORD>` and
    **change the admin password immediately** (or set `ADMIN_EMAIL`/`ADMIN_PASSWORD`).
 
 > Free Postgres/Redis plans are fine to trial; move to paid plans for persistence

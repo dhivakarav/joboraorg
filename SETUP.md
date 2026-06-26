@@ -185,8 +185,8 @@ alembic upgrade head
 ```
 
 ### Default admin account (seeded automatically)
-- **Email:** `admin@jobapplier.com`
-- **Password:** `Admin@123`
+- **Email:** `<ADMIN_EMAIL>`
+- **Password:** `<ADMIN_PASSWORD>`
 
 Change these via env in production (or update `ADMIN_EMAIL`/`ADMIN_PASSWORD`
 in `app/config.py`). New users register → land in "pending" → an admin
@@ -234,7 +234,7 @@ curl -s -X POST localhost:8000/api/auth/register -H 'Content-Type: application/j
   -d '{"full_name":"Test","email":"test@x.com","password":"pass123","job_title":"engineer"}'
 
 ADMIN=$(curl -s -X POST localhost:8000/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"admin@jobapplier.com","password":"Admin@123"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+  -d '{"email":"<ADMIN_EMAIL>","password":"<ADMIN_PASSWORD>"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
 
 UID=$(curl -s localhost:8000/api/admin/users -H "Authorization: Bearer $ADMIN" \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["id"])')

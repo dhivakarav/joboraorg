@@ -36,7 +36,7 @@ Implementation: `app/config.py` (`_resolve_jwt_secret`, `_resolve_credential_key
 
 | Check | Result |
 |---|---|
-| No `admin@jobapplier.com` / `Admin@123` in code | **PASS** |
+| No `<ADMIN_EMAIL>` / `<ADMIN_PASSWORD>` in code | **PASS** |
 | Old default admin login | **PASS** → 401 (account not seeded) |
 | Admin seeded only when `ADMIN_EMAIL` + `ADMIN_PASSWORD` set | **PASS** |
 | Seeded admin login (env creds) | **PASS** → `is_admin=True` |

@@ -117,7 +117,7 @@ npm run dev        # http://localhost:5173 (proxies /api → :8000)
 
 ## Accounts
 
-- **Admin:** `admin@jobapplier.com` / `Admin@123` → redirected to `/admin`.
+- **Admin:** `<ADMIN_EMAIL>` / `<ADMIN_PASSWORD>` → redirected to `/admin`.
 - **New users** register at `/register`, land on a *pending approval* screen,
   and cannot log in until the admin approves them in **User Management**.
 
