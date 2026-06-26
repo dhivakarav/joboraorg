@@ -41,7 +41,7 @@ def upgrade():
     # Mark evidence_available where the evidence JSON actually references a file.
     op.execute("""
         UPDATE applications
-        SET evidence_available = 1
+        SET evidence_available = TRUE
         WHERE (submission_evidence LIKE '%"screenshot"%'
             OR submission_evidence LIKE '%"screenshot_key"%'
             OR submission_evidence LIKE '%"html"%')
@@ -54,7 +54,7 @@ def upgrade():
         WHERE submission_status = 'Verified Submitted'
           AND NOT (COALESCE(application_id,'') <> ''
                    AND COALESCE(confirmation_url,'') <> ''
-                   AND evidence_available = 1)
+                   AND evidence_available = TRUE)
     """)
 
     # Retire "Applied": any legacy Applied/Submitted lifecycle row WITHOUT a real
@@ -63,12 +63,12 @@ def upgrade():
         UPDATE applications
         SET status = 'Tracked',
             submission_status = 'Draft',
-            evidence_available = 0
+            evidence_available = FALSE
         WHERE status IN ('Applied', 'Submitted')
           AND NOT (submission_status = 'Verified Submitted'
                    AND COALESCE(application_id,'') <> ''
                    AND COALESCE(confirmation_url,'') <> ''
-                   AND evidence_available = 1)
+                   AND evidence_available = TRUE)
     """)
 
 
