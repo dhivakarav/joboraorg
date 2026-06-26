@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import smtplib
+import urllib.error
 import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -33,8 +34,19 @@ def _http_post(url: str, headers: dict, payload: dict, ok_codes) -> bool:
     data = json.dumps(payload).encode()
     h = {"Content-Type": "application/json", **headers}
     req = urllib.request.Request(url, data=data, headers=h, method="POST")
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return r.status in ok_codes
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status in ok_codes
+    except urllib.error.HTTPError as e:
+        # Surface the provider's actual error body (e.g. Resend's
+        # "domain is not verified") instead of a bare 403 — never logs secrets.
+        body = ""
+        try:
+            body = e.read().decode()[:400]
+        except Exception:
+            pass
+        host = url.split("//", 1)[-1].split("/", 1)[0]
+        raise RuntimeError(f"HTTP {e.code} from {host}: {body}") from None
 
 
 def _active_email_provider() -> str:
