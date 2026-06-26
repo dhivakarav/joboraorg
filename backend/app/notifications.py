@@ -9,8 +9,11 @@ password reset. Keep bodies plain-text + minimal HTML for deliverability.
 """
 from __future__ import annotations
 
+import json
 import logging
+import re
 import smtplib
+import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
@@ -18,6 +21,71 @@ from typing import Optional
 from .config import settings
 
 log = logging.getLogger("jobara.email")
+
+
+def _bare_email(addr: str) -> str:
+    """Extract the bare address from a possibly 'Name <email>' string."""
+    m = re.search(r"<([^>]+)>", addr or "")
+    return (m.group(1) if m else (addr or "")).strip()
+
+
+def _http_post(url: str, headers: dict, payload: dict, ok_codes) -> bool:
+    data = json.dumps(payload).encode()
+    h = {"Content-Type": "application/json", **headers}
+    req = urllib.request.Request(url, data=data, headers=h, method="POST")
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return r.status in ok_codes
+
+
+def _active_email_provider() -> str:
+    if settings.RESEND_API_KEY:
+        return "resend"
+    if settings.SENDGRID_API_KEY:
+        return "sendgrid"
+    if settings.BREVO_API_KEY:
+        return "brevo"
+    if settings.SMTP_HOST:
+        return "smtp"
+    return "console"
+
+
+def _send_http_api(to: str, subject: str, body: str, html: Optional[str], raise_errors: bool):
+    """Send via a transactional email HTTP API over port 443 — required where
+    outbound SMTP is blocked (e.g. Render). Returns True/False, or None if no API
+    provider is configured (caller falls back to SMTP/console)."""
+    frm = settings.SMTP_FROM
+    provider = _active_email_provider()
+    if provider not in ("resend", "sendgrid", "brevo"):
+        return None
+    try:
+        if provider == "resend":
+            p = {"from": frm, "to": [to], "subject": subject, "text": body}
+            if html:
+                p["html"] = html
+            ok = _http_post("https://api.resend.com/emails",
+                            {"Authorization": f"Bearer {settings.RESEND_API_KEY}"}, p, (200, 201))
+        elif provider == "sendgrid":
+            content = [{"type": "text/plain", "value": body}]
+            if html:
+                content.append({"type": "text/html", "value": html})
+            p = {"personalizations": [{"to": [{"email": to}]}],
+                 "from": {"email": _bare_email(frm)}, "subject": subject, "content": content}
+            ok = _http_post("https://api.sendgrid.com/v3/mail/send",
+                            {"Authorization": f"Bearer {settings.SENDGRID_API_KEY}"}, p, (200, 202))
+        else:  # brevo
+            p = {"sender": {"email": _bare_email(frm)}, "to": [{"email": to}],
+                 "subject": subject, "textContent": body}
+            if html:
+                p["htmlContent"] = html
+            ok = _http_post("https://api.brevo.com/v3/smtp/email",
+                            {"api-key": settings.BREVO_API_KEY}, p, (200, 201))
+        log.info("email sent via %s API to=%s subject=%r", provider, to, subject)
+        return ok
+    except Exception as exc:
+        log.error("EMAIL API SEND FAILED via=%s to=%s subject=%r: %s", provider, to, subject, exc)
+        if raise_errors:
+            raise
+        return False
 
 
 def _send(to: str, subject: str, body: str, html: Optional[str] = None,
@@ -37,6 +105,11 @@ def _send(to: str, subject: str, body: str, html: Optional[str] = None,
     if not to:
         log.error("EMAIL NOT SENT: empty recipient (subject=%r)", subject)
         return False
+    # Prefer an HTTP API provider — these use port 443 and work where outbound
+    # SMTP ports (25/465/587) are blocked, e.g. on Render.
+    api = _send_http_api(to, subject, body, html, raise_errors)
+    if api is not None:
+        return api
     if not settings.SMTP_HOST:
         # No SMTP configured → dev console fallback (clearly logged, not silent).
         log.info("email (console fallback, no SMTP_HOST) to=%s subject=%r", to, subject)
@@ -79,14 +152,17 @@ def smtp_diagnostic(to: str) -> dict:
     """Admin-only diagnostic: attempt a real SMTP send and report the exact
     outcome (and error type, never the password) plus the effective config.
     Lets ops confirm production email delivery without reading server logs."""
+    provider = _active_email_provider()
     cfg = {
+        "provider": provider,
         "host": settings.SMTP_HOST or None,
         "port": settings.SMTP_PORT,
         "tls": settings.SMTP_TLS,
         "user_set": bool(settings.SMTP_USER),
         "from": settings.SMTP_FROM,
-        "mode": "console-fallback" if not settings.SMTP_HOST
-        else ("SSL(465)" if int(settings.SMTP_PORT or 587) == 465 else "STARTTLS"),
+        "mode": provider if provider in ("resend", "sendgrid", "brevo")
+        else ("console-fallback" if not settings.SMTP_HOST
+              else ("SSL(465)" if int(settings.SMTP_PORT or 587) == 465 else "STARTTLS")),
     }
     try:
         ok = _send(to, "Jobara SMTP test",

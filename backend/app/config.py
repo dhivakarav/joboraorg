@@ -187,6 +187,12 @@ class Settings:
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM: str = os.getenv("SMTP_FROM", "Jobara <no-reply@jobara.app>")
     SMTP_TLS: bool = os.getenv("SMTP_TLS", "1") == "1"
+    # HTTP-API email providers (port 443) — REQUIRED on hosts that block outbound
+    # SMTP (e.g. Render blocks 25/465/587). If any key is set it takes precedence
+    # over SMTP. Set exactly one + a verified sender in SMTP_FROM.
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    SENDGRID_API_KEY: str = os.getenv("SENDGRID_API_KEY", "")
+    BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
     APP_BASE_URL: str = os.getenv("APP_BASE_URL", "http://localhost:5173")
 
     # ----- Real job aggregation -----
