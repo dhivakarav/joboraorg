@@ -148,6 +148,19 @@ def approve_user(user_id: int, admin: User = Depends(get_admin_user), db: Sessio
     return {"message": f"{user.full_name} approved", "status": "approved"}
 
 
+@router.post("/users/{user_id}/verify-email")
+def verify_user_email(user_id: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Admin-only: manually mark a user's email as verified (support/QA path for
+    when a user can't receive the verification email). Admin-gated, so the public
+    self-service verification flow and its security are unchanged."""
+    user = _get_target(db, user_id)
+    user.email_verified = True
+    user.email_verify_hash = None
+    user.email_verify_expires = None
+    db.commit()
+    return {"message": f"{user.full_name} email verified", "email_verified": True}
+
+
 @router.post("/users/{user_id}/suspend")
 def suspend_user(user_id: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     user = _get_target(db, user_id)
