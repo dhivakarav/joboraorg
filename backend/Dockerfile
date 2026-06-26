@@ -14,14 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Playwright Chromium + OS deps, installed to a shared path the runtime user can
-# read. Only needed for live automation / the Greenhouse inspector; build with
-# --build-arg INSTALL_BROWSERS=0 to skip (smaller image) if not running live mode.
+# Playwright Chromium + OS deps. Only needed for live automation / the Greenhouse
+# inspector. DISABLED BY DEFAULT (the `--with-deps` apt step pulls font packages
+# unavailable on slim, which breaks the build). Enable for live mode with
+# --build-arg INSTALL_BROWSERS=1.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-ARG INSTALL_BROWSERS=1
-RUN if [ "$INSTALL_BROWSERS" = "1" ]; then \
-      playwright install --with-deps chromium; \
-    fi
+ARG INSTALL_BROWSERS=0
+RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
+    && if [ "$INSTALL_BROWSERS" = "1" ]; then \
+         playwright install --with-deps chromium; \
+       fi
 
 COPY . .
 RUN chmod +x entrypoint.sh
