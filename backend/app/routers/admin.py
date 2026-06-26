@@ -161,6 +161,13 @@ def verify_user_email(user_id: int, admin: User = Depends(get_admin_user), db: S
     return {"message": f"{user.full_name} email verified", "email_verified": True}
 
 
+@router.post("/smtp-test")
+def smtp_test(to: str = Query(...), admin: User = Depends(get_admin_user)):
+    """Admin diagnostic: attempt a real SMTP send to `to` and return the exact
+    result/error + effective SMTP config (never secrets). For debugging prod email."""
+    return notifications.smtp_diagnostic(to)
+
+
 @router.post("/users/{user_id}/suspend")
 def suspend_user(user_id: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     user = _get_target(db, user_id)
