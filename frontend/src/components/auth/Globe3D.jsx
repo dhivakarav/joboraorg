@@ -48,10 +48,11 @@ export default function Globe3D({ className = "" }) {
       return t;
     };
 
-    const dayMap = load("/textures/earth.jpg", true);
-    const nightMap = load("/textures/night.jpg", true);
-    const bump = load("/textures/bump.png");
-    const spec = load("/textures/spec.jpg");
+    const TEX = import.meta.env.BASE_URL; // respects the deploy base (e.g. "/jobora/")
+    const dayMap = load(`${TEX}textures/earth.jpg`, true);
+    const nightMap = load(`${TEX}textures/night.jpg`, true);
+    const bump = load(`${TEX}textures/bump.png`);
+    const spec = load(`${TEX}textures/spec.jpg`);
 
     // ---- Earth ----
     const earth = new THREE.Mesh(
@@ -71,7 +72,7 @@ export default function Globe3D({ className = "" }) {
     group.add(earth);
 
     // ---- Clouds ----
-    const cloudsTex = load("/textures/clouds.png");
+    const cloudsTex = load(`${TEX}textures/clouds.png`);
     const clouds = new THREE.Mesh(
       new THREE.SphereGeometry(RADIUS * 1.012, 64, 64),
       new THREE.MeshLambertMaterial({
