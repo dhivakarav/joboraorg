@@ -32,7 +32,11 @@ def _bare_email(addr: str) -> str:
 
 def _http_post(url: str, headers: dict, payload: dict, ok_codes) -> bool:
     data = json.dumps(payload).encode()
-    h = {"Content-Type": "application/json", **headers}
+    # A real User-Agent is REQUIRED: provider APIs behind Cloudflare (e.g.
+    # api.resend.com) reject the default "Python-urllib/x" signature with HTTP
+    # 403 "error code: 1010". Accept must be JSON.
+    h = {"Content-Type": "application/json", "Accept": "application/json",
+         "User-Agent": "Jobora/1.0 (+https://starconsulting.in)", **headers}
     req = urllib.request.Request(url, data=data, headers=h, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
