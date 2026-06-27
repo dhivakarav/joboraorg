@@ -10,6 +10,7 @@ Values are JSON-serialised, so store plain dict/list/str/number payloads.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from typing import Any, Optional
 
@@ -41,23 +42,27 @@ def _get_redis():
 class _MemoryCache:
     def __init__(self):
         self._store: dict[str, tuple[float, str]] = {}
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[str]:
-        item = self._store.get(key)
-        if not item:
-            return None
-        expires, value = item
-        if expires and expires < time.time():
-            self._store.pop(key, None)
-            return None
-        return value
+        with self._lock:
+            item = self._store.get(key)
+            if not item:
+                return None
+            expires, value = item
+            if expires and expires < time.time():
+                self._store.pop(key, None)
+                return None
+            return value
 
     def setex(self, key: str, ttl: int, value: str):
-        self._store[key] = (time.time() + ttl if ttl else 0, value)
+        with self._lock:
+            self._store[key] = (time.time() + ttl if ttl else 0, value)
 
     def delete_prefix(self, prefix: str):
-        for k in [k for k in self._store if k.startswith(prefix)]:
-            self._store.pop(k, None)
+        with self._lock:
+            for k in [k for k in self._store if k.startswith(prefix)]:
+                self._store.pop(k, None)
 
 
 _memory = _MemoryCache()
@@ -109,17 +114,24 @@ class Cache:
             pipe.expire(key, window, nx=True)
             count, _ = pipe.execute()
             return int(count)
-        # in-memory fallback
-        cur = _memory.get(key)
-        count = (int(cur) if cur else 0) + 1
-        # only (re)set TTL when starting a new window
-        if not cur:
-            _memory.setex(key, window, str(count))
-        else:
-            # preserve remaining TTL by reusing stored expiry
+        # in-memory fallback — hold the lock for the entire read-modify-write so
+        # concurrent async requests can't both read the same stale count.
+        with _memory._lock:
             item = _memory._store.get(key)
-            ttl = max(1, int(item[0] - __import__("time").time())) if item and item[0] else window
-            _memory.setex(key, ttl, str(count))
+            now = time.time()
+            if item:
+                expires, cur_val = item
+                if expires and expires < now:
+                    # window expired — start fresh
+                    item = None
+            if item is None:
+                count = 1
+                _memory._store[key] = (now + window, str(count))
+            else:
+                expires, cur_val = item
+                count = int(cur_val) + 1
+                ttl = max(1, int(expires - now))
+                _memory._store[key] = (now + ttl, str(count))
         return count
 
 
