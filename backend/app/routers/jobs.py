@@ -840,3 +840,175 @@ async def internshala_apply(data: InternshalaApplyIn,
 def refresh_cache(user: User = Depends(get_approved_user)):
     aggregator.clear_cache()
     return {"message": "Job cache cleared — next search fetches fresh listings"}
+
+
+# ── Extension endpoints (used by the Jobora LinkedIn browser extension) ────────
+# Pure computation / AI helpers — no DB writes — so the extension can score and
+# analyse a job before (or without) saving it.
+
+from pydantic import BaseModel as _BaseModel  # noqa: E402
+
+
+class _ExtJobIn(_BaseModel):
+    """Minimal job payload sent by the browser extension."""
+    title: str
+    company: str = ""
+    location: str = ""
+    description_snippet: str = ""
+    employment_type: str = ""
+    experience_level: str = ""
+    salary: str = ""
+    source: str = "LinkedIn"
+    url: str = ""
+    skills: List[str] = []
+
+
+@router.post("/score")
+def score_extension_job(
+    job: _ExtJobIn,
+    user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Score a single job (sent by the browser extension) against the user's
+    resume. Returns match score, reasons, missing skills, and eligibility tier.
+    Pure computation — no DB write.
+    """
+    profile = _load_profile(db, user, materialize=False)
+    job_dict = {
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "description_snippet": job.description_snippet,
+        "employment_type": job.employment_type,
+        "salary": job.salary,
+        "source": job.source,
+        "apply_url": job.url,
+        "remote": "remote" in (job.location or "").lower(),
+    }
+    match = score_job(job_dict, profile)
+    elig = eligibility(job_dict, profile)
+
+    # Missing skills = resume skills not mentioned in title or description.
+    resume_skills = profile.get("skills", [])
+    job_text = f"{job.title} {job.description_snippet}".lower()
+    missing = [s for s in resume_skills if s.lower() not in job_text]
+
+    # Check if already tracked.
+    import hashlib
+    basis = f"{job.source}|{job.company}|{job.title}|{job.url}"
+    fingerprint = hashlib.sha256(basis.lower().encode()).hexdigest()[:32]
+    already_saved = db.query(Application.id).filter_by(
+        user_id=user.id, job_url_hash=fingerprint).first() is not None
+
+    return {
+        "fingerprint": fingerprint,
+        "match_score": match["score"],
+        "match_reasons": match["reasons"],
+        "missing_skills": missing[:12],
+        "eligibility_score": elig["eligibility_score"],
+        "eligibility_tier": elig["eligibility_tier"],
+        "eligible": elig["eligible"],
+        "eligibility_reason": elig["eligibility_reason"],
+        "already_saved": already_saved,
+    }
+
+
+@router.post("/ai-tips")
+def ai_resume_tips(
+    job: _ExtJobIn,
+    user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Generate targeted resume improvement tips for a specific job using Claude.
+    Falls back to a heuristic list when ANTHROPIC_API_KEY is unset.
+    """
+    from ..ai.client import available, generate_text
+    from ..models import Resume as _Resume
+
+    profile = _load_profile(db, user, materialize=False)
+    resume_skills = profile.get("skills", [])
+    job_text = f"{job.title} {job.description_snippet}".lower()
+    missing = [s for s in resume_skills if s.lower() not in job_text]
+
+    if available():
+        res_row = db.query(_Resume).filter_by(user_id=user.id).first()
+        resume_text = ""
+        if res_row and res_row.raw_text:
+            from ..security import decrypt_value
+            try:
+                resume_text = decrypt_value(res_row.raw_text) if res_row.raw_text else ""
+            except Exception:
+                resume_text = res_row.raw_text or ""
+
+        task = (
+            f"Job: {job.title} at {job.company} ({job.location})\n"
+            f"Description: {job.description_snippet[:800]}\n\n"
+            "Give 3 specific, actionable resume improvement tips for this exact role. "
+            "Be concise — one sentence per tip. Format as a numbered list."
+        )
+        tips = generate_text(task, resume_text=resume_text, max_tokens=512)
+        if tips:
+            return {"tips": tips, "ai": True}
+
+    # Heuristic fallback.
+    tips_list = []
+    if missing:
+        tips_list.append(f"Add these skills to your resume: {', '.join(missing[:5])}.")
+    if job.employment_type == "internship":
+        tips_list.append("Highlight coursework, projects, and hackathons relevant to this internship.")
+    tips_list.append(
+        f"Tailor your summary to mention {job.company} and the specific role '{job.title}'."
+    )
+    return {"tips": "\n".join(f"{i+1}. {t}" for i, t in enumerate(tips_list)), "ai": False}
+
+
+@router.post("/cover-letter")
+def generate_cover_letter(
+    job: _ExtJobIn,
+    user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a tailored cover letter for the given job using Claude.
+    Falls back to a structured template when AI is unavailable.
+    """
+    from ..ai.client import available, generate_text
+    from ..models import Resume as _Resume
+
+    profile = _load_profile(db, user, materialize=False)
+
+    if available():
+        res_row = db.query(_Resume).filter_by(user_id=user.id).first()
+        resume_text = ""
+        if res_row and res_row.raw_text:
+            from ..security import decrypt_value
+            try:
+                resume_text = decrypt_value(res_row.raw_text) if res_row.raw_text else ""
+            except Exception:
+                resume_text = res_row.raw_text or ""
+
+        task = (
+            f"Write a concise, genuine cover letter (3 short paragraphs, ≤200 words) "
+            f"for:\n  Role: {job.title}\n  Company: {job.company}\n"
+            f"  Location: {job.location}\n"
+            f"  Job description excerpt: {job.description_snippet[:600]}\n\n"
+            "Do NOT invent facts. Base everything on the candidate's actual resume. "
+            "Do NOT include 'Dear Hiring Manager' or a date — just the body."
+        )
+        letter = generate_text(task, resume_text=resume_text, max_tokens=600)
+        if letter:
+            return {"cover_letter": letter, "ai": True}
+
+    # Template fallback.
+    name = profile.get("name") or user.full_name
+    skills_preview = ", ".join((profile.get("skills") or [])[:4])
+    letter = (
+        f"I am excited to apply for the {job.title} position at {job.company}. "
+        f"With my background in {skills_preview or 'software development'}, "
+        f"I am confident I can contribute meaningfully to your team.\n\n"
+        f"My experience aligns well with the requirements of this role, and I am "
+        f"particularly drawn to {job.company}'s mission and the opportunity to "
+        f"work in {job.location or 'this field'}.\n\n"
+        f"I would welcome the opportunity to discuss how my skills can benefit your team. "
+        f"Thank you for considering my application.\n\nSincerely,\n{name}"
+    )
+    return {"cover_letter": letter, "ai": False}
