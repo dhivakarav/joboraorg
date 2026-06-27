@@ -14,12 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Playwright Chromium + OS deps. Only needed for live automation / the Greenhouse
-# inspector. DISABLED BY DEFAULT (the `--with-deps` apt step pulls font packages
-# unavailable on slim, which breaks the build). Enable for live mode with
-# --build-arg INSTALL_BROWSERS=1.
+# Playwright Chromium + OS deps for live auto-submission.
+# Installed unconditionally: Render's Blueprint spec does not support passing
+# Docker build arguments (dockerBuildArgs is not a recognised field and is
+# silently ignored), so a conditional ARG cannot be used to gate this step.
+# The ARG is kept for local builds that still want to opt out:
+#   docker build --build-arg INSTALL_BROWSERS=0 ...  (used in CI / local dev)
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-ARG INSTALL_BROWSERS=0
+ARG INSTALL_BROWSERS=1
 RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
     && if [ "$INSTALL_BROWSERS" = "1" ]; then \
          playwright install --with-deps chromium; \

@@ -59,12 +59,12 @@ services:
     # then trigger a new deploy. The banner "Live mode is OFF" disappears when both
     # guards pass (live_ready() returns True).
     #
-    # Current state: INSTALL_BROWSERS=1 (Chromium in image) + JOBORA_LIVE=1 (set in Render dashboard).
-    # Both guards satisfied → live_ready() returns True → "Live mode is OFF" banner gone.
-    dockerBuildArgs:
-      # Installs Playwright Chromium + OS deps at Docker build time (~900 MB extra).
-      # Required for live auto-submission. Must be paired with JOBORA_LIVE=1 (env var).
-      INSTALL_BROWSERS: "1"
+    # LIVE MODE: Chromium is installed unconditionally in the Dockerfile (ARG default=1).
+    # Render's Blueprint spec does not support passing Docker build arguments —
+    # dockerBuildArgs is not a recognised field and is silently ignored, so the
+    # previous conditional ARG INSTALL_BROWSERS=0 approach never worked on Render.
+    # The Dockerfile default was changed to ARG INSTALL_BROWSERS=1 so every Render
+    # build includes Chromium. CI overrides this with --build-arg INSTALL_BROWSERS=0.
     envVars:
       - key: DATABASE_URL
         fromDatabase:
