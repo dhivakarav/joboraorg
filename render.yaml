@@ -1,17 +1,32 @@
-# Render Blueprint — provisions the full Jobara stack.
+# Render Blueprint — provisions the full Jobora stack.
 # Deploy: push to GitHub, then Render Dashboard → New → Blueprint → pick this repo.
 # Docs: https://render.com/docs/blueprint-spec
+#
+# PLAN UPGRADE GUIDE (free → production)
+# The free tier is suitable for development and closed beta only.
+# For public / production deployments change EACH plan as follows:
+#
+#   jobara-db    free → starter ($7/mo) or higher for persistence + backups
+#   jobara-redis free → starter ($10/mo) for always-on, no eviction risk
+#   jobara-api   free → starter ($7/mo) REQUIRED for always-on (no cold starts)
+#
+# The free-tier API service SPINS DOWN after ~15 minutes of inactivity.
+# The first request after a spin-down waits ~30s for the container to start.
+# This is unacceptable for a production job-application platform where users
+# expect real-time search results and immediate apply confirmation.
+#
+# To upgrade: edit the plan: fields below and re-deploy the Blueprint in Render.
 databases:
   - name: jobara-db
     databaseName: jobara
-    plan: free          # bump to starter+ for production
+    plan: free          # PRODUCTION: change to starter or higher
     postgresMajorVersion: "16"
 
 services:
   # --- Redis (managed key-value) ---
   - type: keyvalue
     name: jobara-redis
-    plan: free
+    plan: free          # PRODUCTION: change to starter (always-on, no cold start)
     ipAllowList: []     # only accessible from Render services
     maxmemoryPolicy: allkeys-lru
 
@@ -21,7 +36,8 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: free          # free tier: spins down after ~15 min idle (cold start on next request). Bump to starter+ for always-on production.
+    plan: free          # PRODUCTION: MUST change to starter+ — free tier spins down
+                        # after ~15 min idle causing 30s cold starts on first request.
     healthCheckPath: /api/health
     # entrypoint.sh runs `alembic upgrade head` before uvicorn, so migrations
     # apply on every deploy automatically.

@@ -41,7 +41,7 @@ SKIP_ROBOTS = os.getenv("INTERNSHALA_FEED_TRUSTED", "0") == "1"
 FEED_AUTHORIZED = os.getenv("INTERNSHALA_FEED_AUTHORIZED", "0") == "1"
 
 # Hosts we consider to be the local development MOCK (never a real source).
-_MOCK_HOSTS = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+_MOCK_HOSTS = ("localhost", "127.0.0.1", "0.0.0.0", "::1")  # nosec B104 — detection list, not a bind address
 
 # Set once a real authorized feed has returned at least one record this process
 # (distinguishes "Authorized Feed Available" from "Connected").

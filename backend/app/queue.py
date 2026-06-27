@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from .config import settings
@@ -170,7 +170,7 @@ async def process_submission(app_id: int):
             local = ev.get(k)
             if local:
                 try:
-                    key = f"evidence/{app.id}/{k}_{datetime.utcnow().timestamp():.0f}" \
+                    key = f"evidence/{app.id}/{k}_{datetime.now(timezone.utc).replace(tzinfo=None).timestamp():.0f}" \
                           + (".png" if k == "screenshot" else ".html")
                     storage.save_file(key, local)
                     ev[k + "_key"] = key
@@ -194,7 +194,7 @@ async def process_submission(app_id: int):
         app.submission_status = sub
 
         if sub in ("Verified Submitted", "Submitted"):
-            app.submitted_at = datetime.utcnow()
+            app.submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
             app.status = "Submitted"   # internal hint; display derives canonical
             _notify(user, app, sub)
         elif outcome.submission_status in ("Failed", "CAPTCHA Required"):

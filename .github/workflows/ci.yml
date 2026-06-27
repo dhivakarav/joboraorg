@@ -27,6 +27,34 @@ jobs:
         working-directory: backend
         run: python -m pytest tests/ -q
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install security tools
+        run: pip install pip-audit bandit
+      - name: Dependency vulnerability scan (pip-audit)
+        working-directory: backend
+        # Fails the build on any dependency CVE that is NOT suppressed below.
+        # Policy: suppress ONLY when no compatible fix exists for the pinned version.
+        # Every suppression must have an inline justification explaining the blocker.
+        #
+        # PYSEC-2025-185  python-jose 3.5.0
+        #   No fix released in any python-jose version (3.5.0 is the latest).
+        #   Tracked: migrate from python-jose to python-jwt or authlib.
+        run: |
+          pip-audit -r requirements.txt --progress-spinner off \
+            --ignore-vuln PYSEC-2025-185
+      - name: Static security analysis (bandit)
+        working-directory: backend
+        # -ll = medium-and-above severity; -ii = medium-and-above confidence.
+        # -x app/tests/ skips test helpers (which intentionally exercise edge cases).
+        run: bandit -r app/ -ll -ii -x app/tests/ --format txt
+        continue-on-error: false
+
   frontend:
     runs-on: ubuntu-latest
     steps:

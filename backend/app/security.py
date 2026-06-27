@@ -1,7 +1,7 @@
 """Password hashing, JWT, and credential encryption helpers."""
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import bcrypt
@@ -28,7 +28,7 @@ def verify_password(password: str, hashed: str) -> bool:
 # ----- JWT -----
 def _encode(data: dict, minutes: int) -> str:
     to_encode = data.copy()
-    to_encode["exp"] = datetime.utcnow() + timedelta(minutes=minutes)
+    to_encode["exp"] = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 

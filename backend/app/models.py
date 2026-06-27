@@ -1,5 +1,5 @@
 """SQLAlchemy ORM models."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -38,7 +38,7 @@ class User(Base):
     email_verify_hash = Column(String, default="")         # H5: sha256 of verify token
     email_verify_expires = Column(DateTime, nullable=True)
     token_version = Column(Integer, default=0)             # H2: bump to revoke all tokens
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     resume = relationship("Resume", back_populates="user", uselist=False, cascade="all, delete-orphan")
     filters = relationship("JobFilter", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -53,7 +53,7 @@ class PasswordReset(Base):
     token_hash = Column(String, index=True, nullable=False)  # sha256 of the raw token
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class Resume(Base):
@@ -72,7 +72,7 @@ class Resume(Base):
     linkedin_url = Column(String, default="")
     portfolio_url = Column(String, default="")
     raw_text = Column(Text, default="")               # extracted text, for AI analysis
-    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User", back_populates="resume")
 
@@ -134,8 +134,8 @@ class Application(Base):
     submission_attempts = Column(Integer, default=0)       # H1: retry counter
     submission_payload = Column(Text, default="")          # JSON: {answers, external_id, form_url} for the worker
 
-    applied_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     user = relationship("User", back_populates="applications")
 
@@ -174,7 +174,7 @@ class BetaInvite(Base):
     note = Column(String, default="")              # who/what it's for
     used_by_email = Column(String, default="")     # email that redeemed it
     used_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     @property
     def used(self) -> bool:
@@ -194,7 +194,7 @@ class Feedback(Base):
     severity = Column(String, default="")          # bug: low | medium | high
     contact_email = Column(String, default="")
     status = Column(String, default="open", index=True)  # open | triaged | closed
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
 
 
 @event.listens_for(Application, "before_insert")
@@ -231,5 +231,5 @@ class PlatformCredential(Base):
     encrypted_username = Column(Text, default="")      # Fernet token (login email/username)
     encrypted_password = Column(Text, default="")      # Fernet token
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

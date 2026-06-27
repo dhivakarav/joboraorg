@@ -37,7 +37,7 @@ def _fetch_robots(base: str) -> Optional[str]:
     """Fetch robots.txt text. Returns None on any error (→ fail closed)."""
     try:
         req = urllib.request.Request(f"{base}/robots.txt", headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:  # nosec B310 — URL is https://host/robots.txt, not user-supplied
             if resp.status != 200:
                 return None
             return resp.read().decode("utf-8", "replace")

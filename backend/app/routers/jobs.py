@@ -169,7 +169,7 @@ async def discovery_analytics(
         "coverage_percentage": coverage_pct,          # live providers / total
         "live_providers": len(live),
         "total_providers": total,
-        "last_sync": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "last_sync": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
         "by_source": dict(by_source),
         "sources": status,
     }
@@ -568,6 +568,9 @@ def greenhouse_form(
     profile prefill, so the submit wizard can collect truthful answers BEFORE the
     user confirms a real submission. Uses the public Board API (no browser, no
     submit, no DB write)."""
+    # Rate-limited: each call hits the external Greenhouse Board API. Shares the
+    # search bucket (30/min per user) so one spammer can't flood an upstream API.
+    enforce("search", str(user.id), settings.RL_SEARCH_PER_MIN, 60)
     if data.source.lower() != "greenhouse":
         raise HTTPException(status_code=400, detail="This endpoint only handles Greenhouse jobs")
     bj = parse_board_job(data.model_dump())

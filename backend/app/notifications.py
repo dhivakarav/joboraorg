@@ -36,10 +36,10 @@ def _http_post(url: str, headers: dict, payload: dict, ok_codes) -> bool:
     # api.resend.com) reject the default "Python-urllib/x" signature with HTTP
     # 403 "error code: 1010". Accept must be JSON.
     h = {"Content-Type": "application/json", "Accept": "application/json",
-         "User-Agent": "Jobora/1.0 (+https://starconsulting.in)", **headers}
+         "User-Agent": "Jobora/1.0 (+https://jobara.app)", **headers}
     req = urllib.request.Request(url, data=data, headers=h, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=20) as r:
+        with urllib.request.urlopen(req, timeout=20) as r:  # nosec B310 — URL is a static email API endpoint, not user-supplied
             return r.status in ok_codes
     except urllib.error.HTTPError as e:
         # Surface the provider's actual error body (e.g. Resend's
@@ -181,8 +181,8 @@ def smtp_diagnostic(to: str) -> dict:
               else ("SSL(465)" if int(settings.SMTP_PORT or 587) == 465 else "STARTTLS")),
     }
     try:
-        ok = _send(to, "Jobara SMTP test",
-                   "This is a Jobara SMTP diagnostic email. If you received it, "
+        ok = _send(to, "Jobora SMTP test",
+                   "This is a Jobora SMTP diagnostic email. If you received it, "
                    "outbound email is working.", raise_errors=True)
         return {"ok": bool(ok), "error": None, "config": cfg}
     except Exception as exc:
@@ -193,20 +193,20 @@ def smtp_diagnostic(to: str) -> dict:
 def account_pending(to: str, name: str):
     _send(
         to,
-        "Welcome to Jobara — your account is pending approval",
-        f"Hi {name},\n\nThanks for signing up for Jobara. Your account is pending "
+        "Welcome to Jobora — your account is pending approval",
+        f"Hi {name},\n\nThanks for signing up for Jobora. Your account is pending "
         f"admin approval. You'll be able to sign in and start applying once it's "
-        f"approved.\n\n— The Jobara team",
+        f"approved.\n\n— The Jobora team",
     )
 
 
 def account_approved(to: str, name: str):
     _send(
         to,
-        "Your Jobara account is approved 🎉",
-        f"Hi {name},\n\nGood news — your Jobara account has been approved. "
+        "Your Jobora account is approved 🎉",
+        f"Hi {name},\n\nGood news — your Jobora account has been approved. "
         f"Sign in to upload your resume and start discovering matching jobs:\n"
-        f"{settings.APP_BASE_URL}/login\n\n— The Jobara team",
+        f"{settings.APP_BASE_URL}/login\n\n— The Jobora team",
     )
 
 
@@ -215,8 +215,8 @@ def application_recorded(to: str, name: str, job_title: str, company: str, statu
         to,
         f"Application tracked: {job_title} at {company}",
         f"Hi {name},\n\nWe recorded your application for {job_title} at {company} "
-        f"(status: {status}). Track all your applications in your Jobara dashboard:\n"
-        f"{settings.APP_BASE_URL}/app/activity\n\n— The Jobara team",
+        f"(status: {status}). Track all your applications in your Jobora dashboard:\n"
+        f"{settings.APP_BASE_URL}/app/activity\n\n— The Jobora team",
     )
 
 
@@ -224,8 +224,8 @@ def password_reset(to: str, name: str, reset_link: str):
     mins = settings.RESET_TOKEN_TTL_MINUTES
     _send(
         to,
-        "Reset your Jobara password",
+        "Reset your Jobora password",
         f"Hi {name},\n\nUse this link to set a new password (valid for {mins} minutes):\n"
         f"{settings.APP_BASE_URL}{reset_link}\n\nIf you didn't request this, ignore "
-        f"this email.\n\n— The Jobara team",
+        f"this email.\n\n— The Jobora team",
     )
