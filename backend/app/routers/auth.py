@@ -141,13 +141,13 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
     enforce("login", client_ip(request), settings.RL_LOGIN_PER_MIN, 60)
     email = data.email.strip().lower()
     user = db.query(User).filter(User.email == email).first()
-    # Distinct messages (user-enumeration trade-off accepted): "not registered"
-    # when the email is unknown, "incorrect password" when it exists but the
-    # password is wrong.
+    # Use the same message and status for "email not found" and "wrong password"
+    # so attackers cannot enumerate registered emails via differing responses.
+    _BAD_CREDS = HTTPException(status_code=401, detail="Email or password is incorrect")
     if not user:
-        raise HTTPException(status_code=404, detail="This email is not registered")
+        raise _BAD_CREDS
     if not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect password")
+        raise _BAD_CREDS
 
     if not user.is_admin and user.status == "pending":
         raise HTTPException(status_code=403, detail="Your account is pending admin approval")
