@@ -59,12 +59,12 @@ services:
     # then trigger a new deploy. The banner "Live mode is OFF" disappears when both
     # guards pass (live_ready() returns True).
     #
-    # Current state: INSTALL_BROWSERS=0 (no Chromium in image) + JOBORA_LIVE=0.
-    # Change both values below and redeploy to activate real auto-submission.
+    # Current state: INSTALL_BROWSERS=1 (Chromium in image) + JOBORA_LIVE=1 (set in Render dashboard).
+    # Both guards satisfied → live_ready() returns True → "Live mode is OFF" banner gone.
     dockerBuildArgs:
-      # LIVE MODE — set to "1" to install Chromium at build time (required for
-      # auto-submission). Rebuild the service after changing this value.
-      INSTALL_BROWSERS: "0"   # → change to "1" to enable live auto-submission
+      # Installs Playwright Chromium + OS deps at Docker build time (~900 MB extra).
+      # Required for live auto-submission. Must be paired with JOBORA_LIVE=1 (env var).
+      INSTALL_BROWSERS: "1"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -93,10 +93,9 @@ services:
         value: "0"
       - key: LOG_LEVEL
         value: INFO
-      # LIVE MODE env var — must match the INSTALL_BROWSERS build arg above.
-      # Set to "1" only after also setting INSTALL_BROWSERS=1 and redeploying.
+      # LIVE MODE env var — paired with INSTALL_BROWSERS=1 build arg above.
       - key: JOBORA_LIVE
-        value: "0"   # → change to "1" to enable live auto-submission
+        value: "1"
       # SMTP_* and provider keys: add in the dashboard as needed.
 
   # --- React SPA (static site, built by Vite) ---
