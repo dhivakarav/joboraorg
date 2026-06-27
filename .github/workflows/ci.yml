@@ -74,6 +74,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
-        run: docker build --build-arg INSTALL_BROWSERS=0 -t jobara-api ./backend
+        run: docker build -t jobara-api ./backend
       - name: Build web image
         run: docker build -t jobara-web ./frontend

@@ -15,17 +15,14 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Playwright Chromium + OS deps for live auto-submission.
-# Installed unconditionally: Render's Blueprint spec does not support passing
-# Docker build arguments (dockerBuildArgs is not a recognised field and is
-# silently ignored), so a conditional ARG cannot be used to gate this step.
-# The ARG is kept for local builds that still want to opt out:
-#   docker build --build-arg INSTALL_BROWSERS=0 ...  (used in CI / local dev)
+# Installed unconditionally — no ARG or conditional. Reason: render.yaml previously
+# contained dockerBuildArgs: INSTALL_BROWSERS: "0", which Render cached in its
+# service configuration and kept passing as --build-arg INSTALL_BROWSERS=0 on every
+# subsequent build, overriding the Dockerfile's ARG default regardless of its value.
+# Removing the ARG entirely makes the install impossible to suppress via a build arg.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-ARG INSTALL_BROWSERS=1
 RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
-    && if [ "$INSTALL_BROWSERS" = "1" ]; then \
-         playwright install --with-deps chromium; \
-       fi
+    && playwright install --with-deps chromium
 
 COPY . .
 RUN chmod +x entrypoint.sh
