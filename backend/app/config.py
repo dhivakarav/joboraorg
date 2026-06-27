@@ -170,9 +170,11 @@ class Settings:
 
     # Password reset
     RESET_TOKEN_TTL_MINUTES: int = int(os.getenv("RESET_TOKEN_TTL_MINUTES", "60"))
-    # With no SMTP configured, return the reset link in the API response so the
-    # flow is usable in dev. Set EXPOSE_RESET_TOKEN=0 once real email is wired up.
-    EXPOSE_RESET_TOKEN: bool = os.getenv("EXPOSE_RESET_TOKEN", "1") == "1"
+    # Whether to include the raw reset token in the API response (dev convenience).
+    # DEFAULT IS OFF (0). Only set EXPOSE_RESET_TOKEN=1 in isolated local dev when
+    # no real email is configured and the API response is the only way to retrieve
+    # the token. Never enable on any public or staging deployment.
+    EXPOSE_RESET_TOKEN: bool = os.getenv("EXPOSE_RESET_TOKEN", "0") == "1"
 
     # Supported portals (legacy credential connections — kept for compatibility)
     PORTALS = ["LinkedIn", "Naukri", "Indeed", "Foundit", "Bayt", "JobStreet"]
