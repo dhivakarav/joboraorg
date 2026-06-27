@@ -100,7 +100,7 @@ def _send_verification(user: User, raw_token: str) -> bool:
     (failure is already logged at ERROR by notifications._send)."""
     link = f"/verify-email?token={raw_token}"
     return notifications._send(
-        user.email, "Verify your Jobara email",
+        user.email, "Verify your Jobora email",
         f"Hi {user.full_name},\n\nConfirm your email to activate your account:\n"
         f"{settings.APP_BASE_URL}{link}\n\n(Link valid 24h.)",
     )
