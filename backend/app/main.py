@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import settings
 from .database import Base, SessionLocal, engine
@@ -138,6 +139,49 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Browser-extension CORS middleware ─────────────────────────────────────────
+# Starlette's CORSMiddleware returns 400 for origins not in CORS_ORIGINS, which
+# blocks Chrome/Firefox extension service workers whose Origin header is
+# `chrome-extension://<id>` or `moz-extension://<id>`.
+#
+# Extension service workers bypass CORS for hosts in host_permissions, but the
+# server still receives an Origin header and must echo it in the response.
+# This middleware intercepts those requests BEFORE CORSMiddleware evaluates them
+# (add_middleware is LIFO — this middleware executes first because it is added
+# last) and attaches the correct CORS response headers.
+_EXT_PREFIXES = ("chrome-extension://", "moz-extension://", "safari-web-extension://")
+
+
+class ExtensionCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin", "")
+        is_ext = any(origin.startswith(p) for p in _EXT_PREFIXES)
+
+        if not is_ext:
+            return await call_next(request)
+
+        # Handle the CORS preflight — return 200 immediately so the browser
+        # does not fall through to Starlette's CORSMiddleware (which returns 400).
+        if request.method == "OPTIONS":
+            return Response(
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Methods": "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+                    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Request-ID",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "600",
+                },
+            )
+
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+
+
+app.add_middleware(ExtensionCORSMiddleware)
 
 # NOTE: payments/billing are OFF the active roadmap — the billing router is
 # intentionally NOT registered. app/billing.py is parked (unused) but not deleted.

@@ -10,7 +10,9 @@
  */
 import type { StoredAuth } from '../types/job';
 
-const DEFAULT_BASE = 'http://localhost:8000/api';
+// Production backend. Can be overridden via chrome.storage.local `jobora_api_base`
+// (the "Server settings" section in the popup) for local dev.
+const DEFAULT_BASE = 'https://jobara-api.onrender.com/api';
 
 // ── Storage helpers ────────────────────────────────────────────────────────────
 
@@ -145,7 +147,9 @@ export const api = {
 
 export async function login(email: string, password: string) {
   const base = await getBaseUrl();
-  const res = await fetch(`${base}/auth/login`, {
+  const loginUrl = `${base}/auth/login`;
+  console.log('[Jobora] login →', loginUrl);   // visible in SW DevTools → inspect SW
+  const res = await fetch(loginUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
