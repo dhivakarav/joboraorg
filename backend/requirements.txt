@@ -1,14 +1,22 @@
-fastapi==0.115.0
+fastapi==0.115.6
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
 pydantic==2.9.2
 pydantic-settings==2.5.2
-python-jose[cryptography]==3.3.0
+# python-jose 3.3.0 had PYSEC-2024-232/233; 3.4.0 fixes both. PYSEC-2025-185
+# has no fix yet — tracked in known-issues. Switching to python-jwt is a larger
+# effort deferred to a dedicated auth-library sprint.
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
-python-multipart==0.0.12
-pdfplumber==0.11.4
-cryptography==43.0.1
+# python-multipart 0.0.12 had 7 CVEs (GHSA-59g5, GHSA-wp53, GHSA-mj87, GHSA-pp6c,
+# GHSA-v9pg, GHSA-5rvq, GHSA-6jv3). Fixed in 0.0.31.
+python-multipart==0.0.31
+# pdfplumber latest brings in newer pillow (12.x), fixing GHSA-cfh3 and others.
+pdfplumber==0.11.6
+# cryptography 43.0.1 had GHSA-79v4, GHSA-r6ph, GHSA-537c, PYSEC-2026-35.
+# Pinning to 44.0.1+ which fixes GHSA-79v4.
+cryptography==44.0.3
 httpx==0.27.2
 playwright==1.47.0
 email-validator==2.2.0

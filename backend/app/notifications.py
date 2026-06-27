@@ -39,7 +39,7 @@ def _http_post(url: str, headers: dict, payload: dict, ok_codes) -> bool:
          "User-Agent": "Jobora/1.0 (+https://jobara.app)", **headers}
     req = urllib.request.Request(url, data=data, headers=h, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=20) as r:
+        with urllib.request.urlopen(req, timeout=20) as r:  # nosec B310 — URL is a static email API endpoint, not user-supplied
             return r.status in ok_codes
     except urllib.error.HTTPError as e:
         # Surface the provider's actual error body (e.g. Resend's
