@@ -53,8 +53,16 @@ def enqueue(app_id: int) -> str:
     if _inproc_queue is not None:
         _inproc_queue.put_nowait(app_id)
     else:
-        # worker not started (e.g. tests) — run detached
-        asyncio.get_event_loop().create_task(_run_one(app_id))
+        # worker not started (e.g. tests) — schedule on the running loop.
+        # asyncio.get_event_loop() is deprecated in Python 3.10+ and raises
+        # DeprecationWarning / RuntimeError in 3.12 when called outside of
+        # an async context. get_running_loop() is the safe replacement.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_run_one(app_id))
+        except RuntimeError:
+            # No running loop (e.g. sync test context) — run synchronously.
+            asyncio.run(process_submission(app_id))
     return "inprocess"
 
 
