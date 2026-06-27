@@ -53,8 +53,16 @@ def enqueue(app_id: int) -> str:
     if _inproc_queue is not None:
         _inproc_queue.put_nowait(app_id)
     else:
-        # worker not started (e.g. tests) — run detached
-        asyncio.get_event_loop().create_task(_run_one(app_id))
+        # worker not started (e.g. tests) — schedule on the running loop.
+        # asyncio.get_event_loop() is deprecated in Python 3.10+ and raises
+        # DeprecationWarning / RuntimeError in 3.12 when called outside of
+        # an async context. get_running_loop() is the safe replacement.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_run_one(app_id))
+        except RuntimeError:
+            # No running loop (e.g. sync test context) — run synchronously.
+            asyncio.run(process_submission(app_id))
     return "inprocess"
 
 
@@ -121,7 +129,7 @@ async def _run_platform_submit(platform: str, app, payload: dict, answers: dict,
 async def process_submission(app_id: int):
     """Process one queued application: fill + submit + verify + persist."""
     from .adapters.runtime import live_ready
-    from .services import load_profile
+    from .services import cleanup_profile_resources, load_profile
     from .storage import storage
 
     db = SessionLocal()
@@ -149,9 +157,12 @@ async def process_submission(app_id: int):
             return
 
         profile = load_profile(db, user)
-        evidence_dir = str(settings.UPLOAD_DIR / "evidence" / str(app.id))
-        outcome = await _run_platform_submit(app.platform or "Greenhouse", app, payload,
-                                             answers, profile, evidence_dir)
+        try:
+            evidence_dir = str(settings.UPLOAD_DIR / "evidence" / str(app.id))
+            outcome = await _run_platform_submit(app.platform or "Greenhouse", app, payload,
+                                                 answers, profile, evidence_dir)
+        finally:
+            cleanup_profile_resources(profile)
 
         # Push evidence to storage (works for local + S3).
         ev = json.loads(outcome.evidence_json())

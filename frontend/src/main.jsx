@@ -4,19 +4,22 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./components/UI";
+import ErrorBoundary from "./components/ErrorBoundary";
 import SmoothScroll from "./components/ui/SmoothScroll";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-      <ToastProvider>
-        <AuthProvider>
-          <SmoothScroll>
-            <App />
-          </SmoothScroll>
-        </AuthProvider>
-      </ToastProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <ToastProvider>
+          <AuthProvider>
+            <SmoothScroll>
+              <App />
+            </SmoothScroll>
+          </AuthProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );

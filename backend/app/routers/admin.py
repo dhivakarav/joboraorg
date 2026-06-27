@@ -98,45 +98,90 @@ def create_invites(count: int = Query(5, ge=1, le=200), note: str = Query(""),
 
 
 @router.get("/invites")
-def list_invites(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    rows = db.query(BetaInvite).order_by(BetaInvite.created_at.desc()).limit(200).all()
-    return {"invites": [{"code": r.code, "note": r.note, "used": r.used,
-                         "used_by_email": r.used_by_email,
-                         "created_at": r.created_at} for r in rows]}
+def list_invites(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    total = db.query(BetaInvite).count()
+    rows = (db.query(BetaInvite).order_by(BetaInvite.created_at.desc())
+            .offset((page - 1) * page_size).limit(page_size).all())
+    return {
+        "total": total, "page": page, "page_size": page_size,
+        "invites": [{"code": r.code, "note": r.note, "used": r.used,
+                     "used_by_email": r.used_by_email,
+                     "created_at": r.created_at} for r in rows],
+    }
 
 
 @router.get("/feedback")
-def list_feedback(kind: Optional[str] = None, status: Optional[str] = None,
-                  admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+def list_feedback(
+    kind: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
     q = db.query(Feedback)
     if kind:
         q = q.filter(Feedback.kind == kind)
     if status:
         q = q.filter(Feedback.status == status)
-    rows = q.order_by(Feedback.created_at.desc()).limit(200).all()
-    return {"feedback": [{"id": r.id, "kind": r.kind, "message": r.message,
-                          "page": r.page, "rating": r.rating, "severity": r.severity,
-                          "contact_email": r.contact_email, "status": r.status,
-                          "created_at": r.created_at} for r in rows]}
+    total = q.count()
+    rows = q.order_by(Feedback.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return {
+        "total": total, "page": page, "page_size": page_size,
+        "feedback": [{"id": r.id, "kind": r.kind, "message": r.message,
+                      "page": r.page, "rating": r.rating, "severity": r.severity,
+                      "contact_email": r.contact_email, "status": r.status,
+                      "created_at": r.created_at} for r in rows],
+    }
 
 
-@router.get("/users", response_model=list[AdminUserOut])
-def list_users(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    # H4: single grouped count query instead of N+1 per-user counts.
-    counts = dict(
-        db.query(Application.user_id, func.count(Application.id))
-        .group_by(Application.user_id)
-        .all()
-    )
-    users = db.query(User).filter(User.is_admin == False).order_by(User.created_at.desc()).all()  # noqa: E712
-    return [
-        AdminUserOut(
-            id=u.id, full_name=u.full_name, email=u.email,
-            status=u.status, created_at=u.created_at,
-            application_count=counts.get(u.id, 0),
+@router.get("/users")
+def list_users(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    search: Optional[str] = Query(None, description="filter by name or email (case-insensitive substring)"),
+    status: Optional[str] = Query(None, description="filter by account status: pending | approved | suspended"),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    q = db.query(User).filter(User.is_admin == False)  # noqa: E712
+    if search:
+        like = f"%{search.lower()}%"
+        from sqlalchemy import or_
+        q = q.filter(or_(func.lower(User.full_name).like(like),
+                         func.lower(User.email).like(like)))
+    if status:
+        q = q.filter(User.status == status)
+    total = q.count()
+    users = q.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    # Single grouped count query instead of N+1 per-user counts.
+    user_ids = [u.id for u in users]
+    counts: dict = {}
+    if user_ids:
+        counts = dict(
+            db.query(Application.user_id, func.count(Application.id))
+            .filter(Application.user_id.in_(user_ids))
+            .group_by(Application.user_id)
+            .all()
         )
-        for u in users
-    ]
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [
+            AdminUserOut(
+                id=u.id, full_name=u.full_name, email=u.email,
+                status=u.status, created_at=u.created_at,
+                application_count=counts.get(u.id, 0),
+            )
+            for u in users
+        ],
+    }
 
 
 @router.post("/users/{user_id}/approve")

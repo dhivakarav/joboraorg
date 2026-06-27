@@ -6,13 +6,15 @@ import EvidenceModal from "../../components/EvidenceModal";
 const SOURCES = ["Remotive", "Arbeitnow", "Greenhouse", "Lever", "Ashby", "SmartRecruiters",
                  "TheMuse", "RemoteOK", "Jobicy", "Workable", "Wellfound", "JSearch",
                  "Adzuna", "Jooble", "Internshala"];
-// Filterable statuses: evidence-gated submission outcomes + self-reported stages.
 const CANONICAL = ["Draft", "Tracked", "Manual Apply", "Pending Approval", "Queued",
                    "Submitted", "Submitted (Unverified)", "Verified Submitted",
                    "Failed", "Failed — No Confirmation", "Failed — Form Not Found",
                    "Failed — Submit Not Found", "Interview", "Offer", "Rejected"];
-// Stages the user can set by hand (mirror of backend USER_SETTABLE).
 const USER_STAGES = ["Tracked", "Interview", "Offer", "Rejected", "Saved", "Skipped"];
+
+// Statuses that represent real in-flight or confirmed submissions — not deletable.
+const NON_DELETABLE = new Set(["Queued", "Processing", "Submitted",
+                                "Verified Submitted", "Submitted (Unverified)"]);
 
 export default function ActivityLog() {
   const toast = useToast();
@@ -21,6 +23,7 @@ export default function ActivityLog() {
   const [page, setPage] = useState(1);
   const [portal, setPortal] = useState("");
   const [status, setStatus] = useState("");
+  const [deleting, setDeleting] = useState(null);
   const pageSize = 20;
 
   async function load() {
@@ -41,6 +44,20 @@ export default function ActivityLog() {
       load();
     } catch (e) {
       toast(e.message, "error");
+    }
+  }
+
+  async function deleteApp(r) {
+    if (!window.confirm(`Remove "${r.job_title}" at ${r.company} from your Activity Log?`)) return;
+    setDeleting(r.id);
+    try {
+      await api.del(`/applications/${r.id}`);
+      toast("Application removed from Activity Log", "success");
+      load();
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -85,6 +102,7 @@ export default function ActivityLog() {
                   <th className="py-2 pr-3 font-medium">Stage</th>
                   <th className="py-2 pr-3 font-medium">Submission</th>
                   <th className="py-2 pr-3 font-medium">Evidence</th>
+                  <th className="py-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -124,6 +142,18 @@ export default function ActivityLog() {
                     </td>
                     <td className="py-2.5 pr-3">
                       <EvidenceCell row={r} onView={setEvidenceApp} />
+                    </td>
+                    <td className="py-2.5">
+                      {!NON_DELETABLE.has(r.display_status) && (
+                        <button
+                          onClick={() => deleteApp(r)}
+                          disabled={deleting === r.id}
+                          title="Remove from Activity Log"
+                          className="text-muted hover:text-red-500 transition-colors p-1 rounded disabled:opacity-40"
+                          aria-label="Delete application">
+                          {deleting === r.id ? "…" : "✕"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
