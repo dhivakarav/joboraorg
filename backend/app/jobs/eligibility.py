@@ -20,10 +20,10 @@ down-ranked by them.
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
-_CURRENT_YEAR = datetime.utcnow().year
+_CURRENT_YEAR = datetime.now(timezone.utc).replace(tzinfo=None).year
 
 # ---- level / accessibility signals ----
 _SENIOR = re.compile(

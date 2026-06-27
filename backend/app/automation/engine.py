@@ -13,7 +13,7 @@ Respects the daily limit, skips duplicates, and streams progress over SSE.
 """
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict
 
 from ..adapters import adapter_for
@@ -39,7 +39,7 @@ def is_running(user_id: int) -> bool:
 
 
 async def _emit(user_id: int, event: dict):
-    event["ts"] = datetime.utcnow().isoformat()
+    event["ts"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     await get_queue(user_id).put(event)
 
 
@@ -79,7 +79,7 @@ def _load_context(user_id: int) -> dict:
         }
         resume_path = resume.file_path if resume else ""
 
-        since = datetime.utcnow() - timedelta(hours=24)
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
         applied_today = (
             db.query(Application)
             .filter(Application.user_id == user_id, Application.applied_at >= since)
@@ -120,7 +120,7 @@ def _store_evidence(app, result: dict):
     shot = (result or {}).get("screenshot_path")
     if shot:
         try:
-            key = f"evidence/{app.id}/screenshot_{datetime.utcnow().timestamp():.0f}.png"
+            key = f"evidence/{app.id}/screenshot_{datetime.now(timezone.utc).replace(tzinfo=None).timestamp():.0f}.png"
             storage.save_file(key, shot)
             ev["screenshot_key"] = key
         except Exception:
@@ -135,7 +135,7 @@ def _store_evidence(app, result: dict):
     # INTEGRITY GATE: Verified requires id + confirmation_url + a stored artifact.
     if app.application_id and app.confirmation_url and app.evidence_available:
         app.submission_status = "Verified Submitted"
-        app.submitted_at = datetime.utcnow()
+        app.submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _record(user_id: int, job: dict, adapter, status: str, match: int, result: dict = None):

@@ -1,5 +1,5 @@
 """Authentication routes: register, login, me, password reset."""
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -72,13 +72,13 @@ def register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
     # H5: issue an email-verification token (hashed at rest; raw emailed).
     raw_verify = generate_reset_token()
     user.email_verify_hash = hash_token(raw_verify)
-    user.email_verify_expires = datetime.utcnow() + timedelta(hours=24)
+    user.email_verify_expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24)
     db.add(user)
     db.commit()
     db.refresh(user)
     if invite is not None:
         invite.used_by_email = email
-        invite.used_at = datetime.utcnow()
+        invite.used_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
     notifications.account_pending(user.email, user.full_name)
     # Signup is NOT rolled back if the verification email fails (resilience): the
@@ -110,7 +110,7 @@ def _send_verification(user: User, raw_token: str) -> bool:
 def verify_email(data: VerifyEmailIn, db: Session = Depends(get_db)):
     h = hash_token(data.token)
     user = db.query(User).filter(User.email_verify_hash == h).first()
-    if not user or not user.email_verify_expires or user.email_verify_expires < datetime.utcnow():
+    if not user or not user.email_verify_expires or user.email_verify_expires < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=400, detail="Verification link is invalid or expired")
     user.email_verified = True
     user.email_verify_hash = ""
@@ -130,7 +130,7 @@ def resend_verification(data: ResendVerificationIn, request: Request, db: Sessio
     if user and not user.email_verified:
         raw_verify = generate_reset_token()
         user.email_verify_hash = hash_token(raw_verify)
-        user.email_verify_expires = datetime.utcnow() + timedelta(hours=24)
+        user.email_verify_expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24)
         db.commit()
         _send_verification(user, raw_verify)
     return generic
@@ -221,7 +221,7 @@ def forgot_password(data: ForgotPasswordIn, request: Request, db: Session = Depe
     pr = PasswordReset(
         user_id=user.id,
         token_hash=hash_token(raw_token),
-        expires_at=datetime.utcnow() + timedelta(minutes=settings.RESET_TOKEN_TTL_MINUTES),
+        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=settings.RESET_TOKEN_TTL_MINUTES),
     )
     db.add(pr)
     db.commit()
@@ -250,7 +250,7 @@ def reset_password(data: ResetPasswordIn, request: Request, db: Session = Depend
         .filter(PasswordReset.token_hash == hash_token(data.token), PasswordReset.used == False)  # noqa: E712
         .first()
     )
-    if not pr or pr.expires_at < datetime.utcnow():
+    if not pr or pr.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=400, detail="This reset link is invalid or has expired")
 
     user = db.query(User).filter(User.id == pr.user_id).first()

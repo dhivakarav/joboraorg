@@ -169,7 +169,7 @@ async def discovery_analytics(
         "coverage_percentage": coverage_pct,          # live providers / total
         "live_providers": len(live),
         "total_providers": total,
-        "last_sync": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "last_sync": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
         "by_source": dict(by_source),
         "sources": status,
     }

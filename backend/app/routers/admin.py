@@ -1,5 +1,5 @@
 """Admin portal routes (require is_admin)."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -40,7 +40,7 @@ def admin_metrics(admin: User = Depends(get_admin_user), db: Session = Depends(g
     """Beta funnel + ops metrics for the admin dashboard."""
     from datetime import timedelta
 
-    week = datetime.utcnow() - timedelta(days=7)
+    week = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
     users_q = db.query(User).filter(User.is_admin == False)  # noqa: E712
 
     def sub(status):

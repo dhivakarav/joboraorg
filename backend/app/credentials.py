@@ -7,7 +7,7 @@ scoped by ``user_id``.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -27,7 +27,7 @@ def set_credentials(db: Session, user_id: int, platform: str,
     cred.encrypted_username = encrypt_value(username)
     cred.encrypted_password = encrypt_value(password)
     cred.is_active = True
-    cred.updated_at = datetime.utcnow()
+    cred.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     db.refresh(cred)
     return cred

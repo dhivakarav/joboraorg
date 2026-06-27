@@ -19,7 +19,7 @@ only from what the user actually captured on the real confirmation page.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -177,7 +177,7 @@ async def record_evidence(
     if screenshot is not None:
         data = await screenshot.read()
         if data:
-            key = f"evidence/{app.id}/user_confirmation_{datetime.utcnow().timestamp():.0f}.png"
+            key = f"evidence/{app.id}/user_confirmation_{datetime.now(timezone.utc).replace(tzinfo=None).timestamp():.0f}.png"
             storage.save_bytes(key, data)
             ev["screenshot_key"] = key
             ev["source"] = "user-captured (assisted apply)"
@@ -193,10 +193,10 @@ async def record_evidence(
     if app.application_id and app.confirmation_url and app.evidence_available:
         app.submission_status = "Verified Submitted"
         app.status = "Submitted"
-        app.submitted_at = datetime.utcnow()
+        app.submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     elif app.confirmation_url or screenshot_stored:
         app.submission_status = "Submitted"     # attempted with partial proof
-        app.submitted_at = datetime.utcnow()
+        app.submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     # else: stays Manual Apply — nothing claimed without proof.
     db.commit(); db.refresh(app)
 
