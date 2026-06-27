@@ -198,13 +198,15 @@ def me(user: User = Depends(get_current_user)):
 
 
 @router.post("/forgot-password")
-def forgot_password(data: ForgotPasswordIn, db: Session = Depends(get_db)):
+def forgot_password(data: ForgotPasswordIn, request: Request, db: Session = Depends(get_db)):
     """Begin a password reset.
 
+    Rate-limited per IP (shares the register window) to prevent email flooding.
     Always returns the same generic message so attackers can't enumerate which
     emails are registered. When EXPOSE_RESET_TOKEN is on (no SMTP in dev), the
     usable reset link is included in the response.
     """
+    enforce("forgot_password", client_ip(request), settings.RL_REGISTER_PER_HOUR, 3600)
     generic = {"message": "If an account exists for that email, a reset link has been generated."}
     user = db.query(User).filter(User.email == data.email.strip().lower()).first()
     if not user:
@@ -239,9 +241,9 @@ def forgot_password(data: ForgotPasswordIn, db: Session = Depends(get_db)):
 
 
 @router.post("/reset-password")
-def reset_password(data: ResetPasswordIn, db: Session = Depends(get_db)):
-    if len(data.new_password) < 6:
-        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+def reset_password(data: ResetPasswordIn, request: Request, db: Session = Depends(get_db)):
+    enforce("reset_password", client_ip(request), settings.RL_REGISTER_PER_HOUR, 3600)
+    _validate_password(data.new_password)
 
     pr = (
         db.query(PasswordReset)
