@@ -1,31 +1,79 @@
-fastapi==0.115.6
+# Target runtime: Python >=3.10 (CI uses 3.11).
+# Only packages with CVEs are bumped; stable packages with no CVEs are held at
+# their last tested version to minimise blast radius.
+
+# --- Core web framework ---
+# fastapi 0.138.1 pulls starlette >=0.46.0 → resolves to starlette 1.3.1
+# which fixes ALL starlette CVEs (GHSA-f96h, GHSA-wqp7, GHSA-x746, GHSA-82w8,
+# GHSA-jp82, PYSEC-2026-161, GHSA-2c2j). Requires Python >=3.10.
+fastapi==0.138.1
 uvicorn[standard]==0.30.6
+
+# --- Database ---
 sqlalchemy==2.0.35
+alembic==1.13.3
+psycopg2-binary==2.9.9
+
+# --- Validation ---
 pydantic==2.9.2
 pydantic-settings==2.5.2
-# python-jose 3.3.0 had PYSEC-2024-232/233; 3.4.0 fixes both. PYSEC-2025-185
-# has no fix yet — tracked in known-issues. Switching to python-jwt is a larger
-# effort deferred to a dedicated auth-library sprint.
-python-jose[cryptography]==3.4.0
+
+# --- Auth / crypto ---
+# python-jose 3.5.0 fixes PYSEC-2024-232 and PYSEC-2024-233.
+# PYSEC-2025-185 has no available fix in any released version — suppressed in CI.
+python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.2.0
-# python-multipart 0.0.12 had 7 CVEs (GHSA-59g5, GHSA-wp53, GHSA-mj87, GHSA-pp6c,
-# GHSA-v9pg, GHSA-5rvq, GHSA-6jv3). Fixed in 0.0.31.
-python-multipart==0.0.31
-# pdfplumber latest brings in newer pillow (12.x), fixing GHSA-cfh3 and others.
-pdfplumber==0.11.6
-# cryptography 43.0.1 had GHSA-79v4, GHSA-r6ph, GHSA-537c, PYSEC-2026-35.
-# Pinning to 44.0.1+ which fixes GHSA-79v4.
-cryptography==44.0.3
+# bcrypt 4.3.0 = latest 4.x; safe with passlib 1.7.4 (which is tested against 4.x).
+# NOT upgrading to 5.x: passlib 1.7.4 has not been verified against bcrypt 5.x.
+bcrypt==4.3.0
+# cryptography 49.0.0 fixes ALL outstanding CVEs:
+#   GHSA-79v4 (fix: 44.0.1), GHSA-r6ph (fix: 46.0.5), PYSEC-2026-35 (fix: 46.0.6),
+#   GHSA-537c (fix: 48.0.1). Version 49 is past all of them.
+cryptography==49.0.0
+
+# --- File upload ---
+# python-multipart 0.0.32 fixes 7 CVEs (GHSA-59g5, GHSA-wp53, GHSA-mj87, GHSA-pp6c,
+# GHSA-v9pg, GHSA-5rvq, GHSA-6jv3). Requires Python >=3.10.
+python-multipart==0.0.32
+
+# --- PDF parsing ---
+# pdfplumber 0.11.10 pulls in pdfminer-six 20260107 (fixes GHSA-wf5f, GHSA-f83h).
+# pdfminer-six pinned explicitly to guarantee the patched version is installed.
+pdfplumber==0.11.10
+pdfminer-six==20260107
+
+# --- HTTP clients ---
 httpx==0.27.2
+# urllib3 2.7.0 fixes PYSEC-2026-141, GHSA-pq67, GHSA-gm62, GHSA-2xpw, GHSA-38jv.
+# Explicit pin: otherwise boto3/botocore pulls in urllib3 1.26.x (still on 1.x).
+# boto3 >=1.35 and httpx both support urllib3 2.x.
+urllib3==2.7.0
+# requests 2.34.2 fixes GHSA-gc5v-m9x4-r6x2.
+requests==2.34.2
+
+# --- pyasn1: explicit pin to patched version (transitive via python-jose → rsa) ---
+pyasn1==0.6.3
+
+# --- Browser automation ---
 playwright==1.47.0
+
+# --- Email ---
 email-validator==2.2.0
+
+# --- AI ---
 anthropic==0.40.0
+
+# --- Cache / queue ---
 redis==5.0.8
-psycopg2-binary==2.9.9
-alembic==1.13.3
 rq==1.16.2
+
+# --- Cloud storage ---
 boto3==1.35.36
+
+# --- Observability ---
 sentry-sdk==2.14.0
 posthog==3.7.0
-pytest==8.3.3
+
+# --- Testing ---
+# pytest 9.1.1 fixes GHSA-6w46-j5rx-g56g. Requires Python >=3.10.
+pytest==9.1.1

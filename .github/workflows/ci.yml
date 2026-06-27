@@ -38,39 +38,20 @@ jobs:
         run: pip install pip-audit bandit
       - name: Dependency vulnerability scan (pip-audit)
         working-directory: backend
-        # Fails the build if any dependency has a known CVE.
-        # Suppressed transitive CVEs that can't be fixed by bumping requirements.txt
-        # directly. Each suppression must have a GitHub issue tracking the upstream fix.
+        # Fails the build on any dependency CVE that is NOT suppressed below.
+        # Policy: suppress ONLY when no compatible fix exists for the pinned version.
+        # Every suppression must have an inline justification explaining the blocker.
         #
-        # PYSEC-2025-185  python-jose — no upstream fix yet; tracked for auth library replacement
-        # PYSEC-2026-161  starlette   — transitive from FastAPI; fix pending FastAPI upgrade
-        # GHSA-2c2j-9gv5-cj73 starlette — same upstream constraint
-        # GHSA-pq67-6m6q-mj2v urllib3  — transitive via httpx; urllib3 2.x is a breaking change
-        # GHSA-gm62-xv2j-4w53 urllib3  — same
-        # GHSA-2xpw-w6gg-jr37 urllib3  — same
-        # GHSA-38jv-5279-wg99 urllib3  — same
-        # PYSEC-2026-141   urllib3  — same
-        # GHSA-537c-gmf6-5ccf cryptography — fix in 48.x; verifying compat before bump
-        # GHSA-r6ph-v2qm-q3c2 cryptography — fix in 46.x; tracking
-        # GHSA-gc5v-m9x4-r6x2 requests   — transitive; requests 2.33.0 compat check pending
+        # PYSEC-2025-185  python-jose 3.5.0
+        #   No fix released in any python-jose version (3.5.0 is the latest).
+        #   Tracked: migrate from python-jose to python-jwt or authlib.
         run: |
           pip-audit -r requirements.txt --progress-spinner off \
-            --ignore-vuln PYSEC-2025-185 \
-            --ignore-vuln PYSEC-2026-161 \
-            --ignore-vuln GHSA-2c2j-9gv5-cj73 \
-            --ignore-vuln GHSA-pq67-6m6q-mj2v \
-            --ignore-vuln GHSA-gm62-xv2j-4w53 \
-            --ignore-vuln GHSA-2xpw-w6gg-jr37 \
-            --ignore-vuln GHSA-38jv-5279-wg99 \
-            --ignore-vuln PYSEC-2026-141 \
-            --ignore-vuln GHSA-537c-gmf6-5ccf \
-            --ignore-vuln GHSA-r6ph-v2qm-q3c2 \
-            --ignore-vuln GHSA-gc5v-m9x4-r6x2
+            --ignore-vuln PYSEC-2025-185
       - name: Static security analysis (bandit)
         working-directory: backend
-        # -ll = medium severity and above; -ii = medium confidence and above.
-        # -x tests/ = skip test files (test helpers intentionally exercise edge cases).
-        # Exit 0 on LOW findings only; non-zero on MEDIUM/HIGH → build fails.
+        # -ll = medium-and-above severity; -ii = medium-and-above confidence.
+        # -x app/tests/ skips test helpers (which intentionally exercise edge cases).
         run: bandit -r app/ -ll -ii -x app/tests/ --format txt
         continue-on-error: false
 
