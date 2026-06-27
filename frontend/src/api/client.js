@@ -6,6 +6,8 @@ const BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export { BASE };
 
+// --- Token helpers -----------------------------------------------------------
+
 export function getToken() {
   return localStorage.getItem("jobora_token") || "";
 }
@@ -14,6 +16,56 @@ export function setToken(token) {
   if (token) localStorage.setItem("jobora_token", token);
   else localStorage.removeItem("jobora_token");
 }
+
+export function getRefreshToken() {
+  return localStorage.getItem("jobora_refresh_token") || "";
+}
+
+export function setRefreshToken(token) {
+  if (token) localStorage.setItem("jobora_refresh_token", token);
+  else localStorage.removeItem("jobora_refresh_token");
+}
+
+// Decode the expiry from a JWT without verifying (client-side, no secret).
+// Returns the epoch-seconds `exp` claim, or 0 if unparseable.
+export function tokenExp(token) {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.exp || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// --- Refresh logic -----------------------------------------------------------
+
+// Singleton in-flight refresh promise so concurrent 401 responses only
+// trigger one /auth/refresh call instead of N simultaneous ones.
+let _refreshPromise = null;
+
+async function _doRefresh() {
+  const rt = getRefreshToken();
+  if (!rt) throw new Error("No refresh token");
+  const res = await fetch(`${BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: rt }),
+  });
+  if (!res.ok) throw new Error("Refresh failed");
+  const data = await res.json();
+  setToken(data.access_token);
+  if (data.refresh_token) setRefreshToken(data.refresh_token);
+  return data.access_token;
+}
+
+export async function attemptRefresh() {
+  if (!_refreshPromise) {
+    _refreshPromise = _doRefresh().finally(() => { _refreshPromise = null; });
+  }
+  return _refreshPromise;
+}
+
+// --- Core request ------------------------------------------------------------
 
 async function request(path, { method = "GET", body, isForm = false } = {}) {
   const headers = {};
@@ -26,7 +78,22 @@ async function request(path, { method = "GET", body, isForm = false } = {}) {
     payload = JSON.stringify(body);
   }
 
-  const res = await fetch(`${BASE}${path}`, { method, headers, body: payload });
+  let res = await fetch(`${BASE}${path}`, { method, headers, body: payload });
+
+  // On 401, attempt a silent token refresh and retry the original request once.
+  // Skip if this IS the refresh call (avoid infinite loop).
+  if (res.status === 401 && path !== "/auth/refresh" && getRefreshToken()) {
+    try {
+      const newToken = await attemptRefresh();
+      const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+      res = await fetch(`${BASE}${path}`, { method, headers: retryHeaders, body: payload });
+    } catch {
+      // Refresh failed — clear both tokens so the app redirects to login.
+      setToken("");
+      setRefreshToken("");
+      throw new Error("Session expired. Please sign in again.");
+    }
+  }
 
   if (res.status === 204) return null;
 
@@ -39,7 +106,6 @@ async function request(path, { method = "GET", body, isForm = false } = {}) {
   }
 
   if (!res.ok) {
-    // Backend error envelope is {error, request_id}; older paths use {detail}.
     const detail =
       (data && (data.error || data.detail)) ||
       (typeof data === "string" ? data : "Request failed");
@@ -59,6 +125,5 @@ export const api = {
     fd.append("file", file);
     return request(p, { method: "POST", body: fd, isForm: true });
   },
-  // Multipart POST with arbitrary fields + optional files (FormData built by caller).
   postForm: (p, fd) => request(p, { method: "POST", body: fd, isForm: true }),
 };

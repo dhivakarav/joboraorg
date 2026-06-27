@@ -13,6 +13,11 @@ uploads/
 frontend/node_modules/
 frontend/dist/
 
+# E2E test artifacts — contain auth state (localStorage tokens) and screenshots.
+# Never commit: these may include real JWTs from test runs against a live stack.
+frontend/e2e/.artifacts/
+frontend/test-results/
+
 # Env — never commit real secrets/API keys
 .env
 **/.env

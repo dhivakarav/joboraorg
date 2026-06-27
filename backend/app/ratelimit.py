@@ -17,10 +17,19 @@ from .config import settings
 
 
 def client_ip(request: Request) -> str:
-    """Best-effort client IP, honoring the first hop of X-Forwarded-For."""
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        return xff.split(",")[0].strip()
+    """Return the real client IP for rate-limiting.
+
+    Trust X-Real-IP first — nginx sets this to $remote_addr (the actual TCP
+    peer) and it cannot be forged by the client. Fall back to X-Forwarded-For
+    only when running without nginx (direct uvicorn in dev/tests), and in that
+    case use the LAST hop so an upstream proxy can't be faked by prepending
+    extra IPs. Never trust client-supplied X-Forwarded-For in production.
+    """
+    # X-Real-IP is set by nginx to $remote_addr — unforgeable behind our proxy.
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+    # Direct uvicorn (dev/tests): fall back to the TCP peer address.
     return request.client.host if request.client else "unknown"
 
 

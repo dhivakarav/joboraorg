@@ -49,11 +49,13 @@ def test_verified_login_allowed(client, monkeypatch):
     assert r.json().get("access_token")
 
 
-def test_not_registered_email_message(client):
-    r = client.post("/api/auth/login",
-                    json={"email": "nobody-here@example.com", "password": "whatever1"})
-    assert r.status_code == 404
-    assert "not registered" in str(r.json().get("error", "")).lower()
+def test_unknown_email_returns_same_401_as_wrong_password(client):
+    # Both "email not found" and "wrong password" must return identical 401s
+    # so attackers cannot enumerate which emails are registered.
+    r_unknown = client.post("/api/auth/login",
+                            json={"email": "nobody-here@example.com", "password": "whatever1"})
+    assert r_unknown.status_code == 401
+    assert "email or password" in str(r_unknown.json().get("error", "")).lower()
 
 
 def test_resend_verification_is_generic(client):
