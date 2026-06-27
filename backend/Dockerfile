@@ -14,15 +14,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Playwright Chromium + OS deps for live auto-submission.
-# Installed unconditionally — no ARG or conditional. Reason: render.yaml previously
-# contained dockerBuildArgs: INSTALL_BROWSERS: "0", which Render cached in its
-# service configuration and kept passing as --build-arg INSTALL_BROWSERS=0 on every
-# subsequent build, overriding the Dockerfile's ARG default regardless of its value.
-# Removing the ARG entirely makes the install impossible to suppress via a build arg.
+# Playwright Chromium for live auto-submission.
+#
+# Why not `playwright install --with-deps chromium`:
+#   Playwright 1.47.0 detects python:3.11-slim as Ubuntu 20.04 and tries to
+#   install font packages under their Ubuntu 20.04 names (ttf-unifont,
+#   ttf-ubuntu-font-family) which do not exist on Debian Bookworm. The build
+#   fails with "Package '...' has no installation candidate".
+#
+# Fix: install Chromium's runtime dependencies manually using the correct
+#   Debian Bookworm package names, then install only the browser binary
+#   (playwright install chromium, no --with-deps).
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
-    && playwright install --with-deps chromium
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       # Chromium runtime deps
+       libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 \
+       libcairo2 libcups2 libdbus-1-3 libdrm2 libegl1 libgbm1 \
+       libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 \
+       libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
+       libxext6 libxfixes3 libxkbcommon0 libxrandr2 \
+       # Fonts (Debian Bookworm names — ttf-unifont → fonts-unifont)
+       fonts-liberation fonts-noto-color-emoji fonts-unifont \
+    && rm -rf /var/lib/apt/lists/* \
+    && playwright install chromium
 
 COPY . .
 RUN chmod +x entrypoint.sh
