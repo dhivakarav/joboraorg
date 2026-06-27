@@ -29,13 +29,18 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-       # Chromium runtime deps
+       # Chromium runtime deps (Debian Bookworm package names)
+       # Three packages playwright --with-deps uses have wrong names on Bookworm:
+       #   libfontconfig  → libfontconfig1  (renamed)
+       #   ttf-unifont    → fonts-unifont   (renamed)
+       #   ttf-ubuntu-font-family → not available (Ubuntu-only, omitted)
        libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 \
        libcairo2 libcups2 libdbus-1-3 libdrm2 libegl1 libgbm1 \
        libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 \
        libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 \
        libxext6 libxfixes3 libxkbcommon0 libxrandr2 \
-       # Fonts (Debian Bookworm names — ttf-unifont → fonts-unifont)
+       libfontconfig1 libfreetype6 libxshmfence1 \
+       # Fonts (Debian Bookworm names)
        fonts-liberation fonts-noto-color-emoji fonts-unifont \
     && rm -rf /var/lib/apt/lists/* \
     && playwright install chromium
