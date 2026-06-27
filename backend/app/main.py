@@ -152,11 +152,15 @@ def health():
 
 @app.get("/api/ready")
 def ready():
-    """Readiness probe: reports the status of every subsystem."""
-    import os
+    """Readiness probe: reports the status of every subsystem.
 
+    live_apply.ready is the canonical check: it is True only when BOTH
+    guards in live_ready() pass (JOBORA_LIVE=1 AND Chromium installed).
+    live_apply.reason explains exactly which guard is failing when False.
+    """
     from sqlalchemy import text
 
+    from .adapters.runtime import live_ready
     from .cache import cache
 
     db_ok = True
@@ -166,11 +170,13 @@ def ready():
     except Exception:
         db_ok = False
 
+    live_ok, live_reason = live_ready()
+
     return {
         "status": "ok" if db_ok else "degraded",
         "database": {"ok": db_ok, "engine": engine.url.get_backend_name()},
         "cache": {"backend": cache.backend},
         "email": {"backend": "smtp" if settings.SMTP_HOST else "console"},
         "ai": {"enabled": bool(settings.ANTHROPIC_API_KEY)},
-        "live_apply": os.getenv("JOBORA_LIVE", "0") == "1",
+        "live_apply": {"ready": live_ok, "reason": live_reason},
     }
