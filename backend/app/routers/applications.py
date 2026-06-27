@@ -43,15 +43,39 @@ def list_applications(
         q = q.filter(Application.portal == portal)
     if mode:
         q = q.filter(Application.application_mode == mode)
+
+    # DB-level prefilter on submission_status to narrow the Python pass when a
+    # display_status filter is requested. display_status is a Python property
+    # (not a DB column), so an exact DB filter isn't possible, but each canonical
+    # status maps to a small set of submission_status values we CAN push to the DB.
+    # This turns the worst-case from "load all N rows" to "load only the matching
+    # submission_status bucket", which is typically orders of magnitude smaller.
+    _SS_PREFILTER: dict = {
+        "Draft":               ["Draft", ""],
+        "Tracked":             ["Draft"],
+        "Manual Apply":        ["Manual Apply", "Manual Apply Required"],
+        "Pending Approval":    ["Pending Approval"],
+        "Queued":              ["Queued", "Processing"],
+        "Submitted":           ["Submitted", "Verified Submitted"],
+        "Verified Submitted":  ["Verified Submitted", "Submitted"],
+        "Submitted (Unverified)": ["Submitted", "Verified Submitted"],
+        "Failed":              ["Failed", "CAPTCHA Required"],
+        "Failed — No Confirmation":  ["Failed — No Confirmation"],
+        "Failed — Form Not Found":   ["Failed — Form Not Found"],
+        "Failed — Submit Not Found": ["Failed — Submit Not Found"],
+        # User-set stages live in the legacy `status` column — no prefilter possible.
+        "Interview": None, "Offer": None, "Rejected": None,
+    }
+    if status and status in _SS_PREFILTER:
+        pre = _SS_PREFILTER[status]
+        if pre is not None:
+            q = q.filter(Application.submission_status.in_(pre))
+
     if sort == "match_score":
         q = q.order_by(Application.match_score.desc(), Application.applied_at.desc())
     else:
         q = q.order_by(Application.applied_at.desc())
 
-    # HARD MATCH-SCORE FLOOR (same threshold as Find Jobs): Matched Jobs and the
-    # Pending Approval queue must never show a row below the user's min_match_score.
-    # Rows the user has actively advanced into their human funnel are exempt so a
-    # raised slider never hides a job they're already interviewing for.
     min_match = db.query(JobFilter.min_match_score).filter_by(user_id=user.id).scalar()
     min_match = min_match if min_match is not None else 50
 
@@ -59,12 +83,11 @@ def list_applications(
         if not min_match:
             return True
         if a.display_status not in _FLOOR_APPLIES_TO:
-            return True          # user-curated / in-funnel rows are never floored
+            return True
         return (a.match_score or 0) >= min_match
 
-    # `status` filters on the canonical display status (derived), so apply it in
-    # Python — it never matches the raw stored `status` column anymore. The match
-    # floor is also applied in Python so it composes with the derived-status filter.
+    # Python-side pass for exact display_status and match-floor (both are derived).
+    # The DB prefilter above has already reduced the result set significantly.
     rows = [a for a in q.all() if _passes_floor(a) and (not status or a.display_status == status)]
     total = len(rows)
     items = rows[(page - 1) * page_size: page * page_size]
