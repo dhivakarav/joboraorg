@@ -41,6 +41,30 @@ services:
     healthCheckPath: /api/health
     # entrypoint.sh runs `alembic upgrade head` before uvicorn, so migrations
     # apply on every deploy automatically.
+    #
+    # LIVE MODE (auto-submission of real job applications):
+    # Controlled by two independent guards that BOTH must be satisfied:
+    #
+    #   Guard 1 — JOBORA_LIVE=1 (env var below, default 0/off)
+    #     Set to "1" to enable live submission. The Dockerfile exposes this as the
+    #     INSTALL_BROWSERS build arg — if browsers aren't in the image, live mode
+    #     returns "Playwright Chromium is not installed" even when this is "1".
+    #
+    #   Guard 2 — Chromium installed in the Docker image (build arg below)
+    #     The Dockerfile only runs `playwright install --with-deps chromium` when
+    #     INSTALL_BROWSERS=1. This roughly doubles the image size (~900MB) and pulls
+    #     system font/audio packages — acceptable for live mode, not for API-only.
+    #
+    # To enable live mode, set BOTH: JOBORA_LIVE=1 AND buildArgs INSTALL_BROWSERS=1,
+    # then trigger a new deploy. The banner "Live mode is OFF" disappears when both
+    # guards pass (live_ready() returns True).
+    #
+    # Current state: INSTALL_BROWSERS=0 (no Chromium in image) + JOBORA_LIVE=0.
+    # Change both values below and redeploy to activate real auto-submission.
+    dockerBuildArgs:
+      # LIVE MODE — set to "1" to install Chromium at build time (required for
+      # auto-submission). Rebuild the service after changing this value.
+      INSTALL_BROWSERS: "0"   # → change to "1" to enable live auto-submission
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -69,6 +93,10 @@ services:
         value: "0"
       - key: LOG_LEVEL
         value: INFO
+      # LIVE MODE env var — must match the INSTALL_BROWSERS build arg above.
+      # Set to "1" only after also setting INSTALL_BROWSERS=1 and redeploying.
+      - key: JOBORA_LIVE
+        value: "0"   # → change to "1" to enable live auto-submission
       # SMTP_* and provider keys: add in the dashboard as needed.
 
   # --- React SPA (static site, built by Vite) ---
