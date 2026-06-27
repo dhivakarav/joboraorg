@@ -20,10 +20,20 @@ export default function VerificationCenter() {
   const [evidenceApp, setEvidenceApp] = useState(null);
   const [onlyVerified, setOnlyVerified] = useState(false);
 
+  // Fetch all submission-attempt rows by paginating until exhausted. The backend
+  // caps page_size at 100, so we fetch repeatedly until we have everything.
   async function load() {
     try {
-      const d = await api.get("/applications?page=1&page_size=100");
-      setRows(d.items || []);
+      const PAGE = 100;
+      let all = [];
+      let page = 1;
+      while (true) {
+        const d = await api.get(`/applications?page=${page}&page_size=${PAGE}`);
+        all = all.concat(d.items || []);
+        if (all.length >= d.total || (d.items || []).length < PAGE) break;
+        page++;
+      }
+      setRows(all);
     } catch (e) {
       toast(e.message, "error");
     }
