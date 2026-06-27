@@ -1012,3 +1012,64 @@ def generate_cover_letter(
         f"Thank you for considering my application.\n\nSincerely,\n{name}"
     )
     return {"cover_letter": letter, "ai": False}
+
+
+@router.post("/ai-summary")
+def ai_match_summary(
+    job: _ExtJobIn,
+    user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a 2-3 sentence plain-English summary of how this job matches the
+    user's profile — shown automatically in the sidebar after scoring.
+    Falls back to a heuristic sentence when AI is unavailable.
+    """
+    from ..ai.client import available, generate_text
+    from ..models import Resume as _Resume
+
+    profile = _load_profile(db, user, materialize=False)
+    match = score_job({"title": job.title, "company": job.company,
+                        "description_snippet": job.description_snippet,
+                        "location": job.location}, profile)
+    elig = eligibility({"title": job.title, "company": job.company,
+                         "description_snippet": job.description_snippet,
+                         "location": job.location, "employment_type": job.employment_type},
+                        profile)
+
+    resume_skills = profile.get("skills", [])
+    job_text = f"{job.title} {job.description_snippet}".lower()
+    matching = [s for s in resume_skills if s.lower() in job_text]
+    missing  = [s for s in resume_skills if s.lower() not in job_text]
+
+    if available():
+        res_row = db.query(_Resume).filter_by(user_id=user.id).first()
+        resume_text = ""
+        if res_row and res_row.raw_text:
+            from ..security import decrypt_value
+            try:
+                resume_text = decrypt_value(res_row.raw_text) if res_row.raw_text else ""
+            except Exception:
+                resume_text = res_row.raw_text or ""
+
+        task = (
+            f"Job: {job.title} at {job.company} ({job.location or 'Unknown location'})\n"
+            f"Match score: {match['score']}/100. Tier: {elig['eligibility_tier']}.\n"
+            f"Matching skills: {', '.join(matching[:6]) or 'none identified'}.\n"
+            f"Missing skills: {', '.join(missing[:5]) or 'none identified'}.\n\n"
+            "Write exactly 2 sentences summarising this job match for the candidate. "
+            "Be specific about skills — mention which ones match and which are gaps. "
+            "Do not start with 'This'. Be direct and honest."
+        )
+        summary = generate_text(task, resume_text=resume_text, max_tokens=160)
+        if summary:
+            return {"summary": summary, "ai": True}
+
+    # Heuristic fallback.
+    tier = elig.get("eligibility_tier", "Possible Match")
+    score = match["score"]
+    if matching:
+        base = f"Your top matching skills are {', '.join(matching[:3])} ({score}% overall match)."
+    else:
+        base = f"Resume match is {score}% — no clear skill overlap found for this role."
+    gap = f" Key gaps: {', '.join(missing[:3])}." if missing else ""
+    return {"summary": base + gap, "ai": False}

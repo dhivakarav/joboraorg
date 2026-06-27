@@ -126,6 +126,12 @@ chrome.runtime.onMessage.addListener(
             break;
           }
 
+          case 'AI_SUMMARY': {
+            const summary = await api.post('/jobs/ai-summary', jobPayload(msg.job));
+            sendResponse(ok(summary));
+            break;
+          }
+
           case 'COVER_LETTER': {
             const letter = await api.post('/jobs/cover-letter', jobPayload(msg.job));
             sendResponse(ok(letter));

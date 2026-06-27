@@ -19,6 +19,7 @@ export type ExtRequest =
   | { type: 'SCORE_JOB'; job: ExtractedJob }
   | { type: 'SAVE_JOB'; job: ExtractedJob }
   | { type: 'AI_TIPS'; job: ExtractedJob }
+  | { type: 'AI_SUMMARY'; job: ExtractedJob }
   | { type: 'COVER_LETTER'; job: ExtractedJob };
 
 // ── Response types ─────────────────────────────────────────────────────────────
