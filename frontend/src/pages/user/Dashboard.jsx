@@ -81,6 +81,7 @@ export default function Dashboard() {
         es.close();
         loadStats();
         loadPending();
+        loadAnalytics();   // refresh analytics cards after every scan
         toast(data.message || "Finished", "success");
       }
       if (data.type === "error") toast(data.message, "error");

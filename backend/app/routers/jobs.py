@@ -123,54 +123,69 @@ def internshala_link(q: str = Query(""), location: str = Query("India"),
 
 
 @router.get("/analytics")
-async def discovery_analytics(
-    location: str = Query("", description="optional location anchor, e.g. India"),
-    refresh: bool = Query(False, description="bypass cache + pull freshest postings (Dashboard Refresh)"),
+def discovery_analytics(
     user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
 ):
-    """Provider/discovery analytics for the dashboard: how many jobs we can
-    discover right now, split by internship / fresher / AI-ML, plus per-source
-    coverage and the last sync time."""
+    """Dashboard analytics calculated directly from the Application rows stored
+    in PostgreSQL for the current user. Updates after every scan with no caching.
+
+    Previous implementation called aggregator.search() (a live external API call
+    cached for 15 min) and counted from those results. This meant the cards never
+    reflected what was actually stored in the database — the values were frozen
+    until the TTL expired and always based on a different query than the scan used.
+    """
     from datetime import datetime, timezone
+    from sqlalchemy import func
     from ..jobs.base import infer_employment_type
-    from ..jobs.eligibility import early_signal
     from ..jobs.matching import is_ai_ml
 
-    # Broad discovery snapshot across every available provider. Refresh bypasses the
-    # cache and pulls the newest postings (explicit user action only).
-    jobs = await aggregator.search(query="engineer OR developer OR data OR analyst OR intern",
-                                   location=location, keywords=[], limit=150,
-                                   use_cache=not refresh, recent=refresh)
+    # ── 1. Count all applications this user has tracked/discovered ─────────────
+    apps = db.query(Application).filter(Application.user_id == user.id).all()
+    total = len(apps)
 
-    from collections import Counter
-    by_source = Counter(j.get("source", "") for j in jobs)
-    internships = freshers = ai_ml = 0
-    for j in jobs:
-        et = j.get("employment_type") or infer_employment_type(j.get("title", ""))
-        sig = (early_signal({"title": j.get("title", ""),
-                             "description_snippet": j.get("description_snippet", "")}) or "")
-        if et == "internship" or "intern" in sig.lower():
+    internships = 0
+    freshers = 0
+    ai_ml_count = 0
+    for a in apps:
+        title = a.job_title or ""
+        et = infer_employment_type(title)
+        if et == "internship":
             internships += 1
-        elif et == "fresher" or sig in ("New Grad", "Fresher Friendly"):
+        elif et == "fresher":
             freshers += 1
-        if is_ai_ml(j.get("title", ""), j.get("description_snippet", "")):
-            ai_ml += 1
+        if is_ai_ml(title):
+            ai_ml_count += 1
 
+    # ── 2. Coverage: jobs that meet the user's match-score threshold ───────────
+    # Coverage = (jobs with match_score >= min_match) / total * 100
+    min_match = db.query(JobFilter.min_match_score).filter_by(user_id=user.id).scalar() or 50
+    matched = sum(1 for a in apps if (a.match_score or 0) >= min_match)
+    coverage_pct = round(100 * matched / total) if total else 0
+
+    # ── 3. Breakdown by job source (from the DB, not the API) ─────────────────
+    source_rows = (
+        db.query(Application.source, func.count(Application.id))
+        .filter(Application.user_id == user.id)
+        .group_by(Application.source)
+        .all()
+    )
+    by_source = {src: cnt for src, cnt in source_rows if src}
+
+    # ── 4. Provider connectivity (static, no external calls) ──────────────────
     status = aggregator.provider_status()
     live = [s for s in status if s.get("status") == "Connected"]
-    total = len(status)
-    coverage_pct = round(100 * len(live) / total) if total else 0
 
     return {
-        "jobs_discovered": len(jobs),
+        "jobs_discovered": total,
         "internships": internships,
         "freshers": freshers,
-        "ai_ml": ai_ml,
-        "coverage_percentage": coverage_pct,          # live providers / total
+        "ai_ml": ai_ml_count,
+        "coverage_percentage": coverage_pct,
         "live_providers": len(live),
-        "total_providers": total,
+        "total_providers": len(status),
         "last_sync": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
-        "by_source": dict(by_source),
+        "by_source": by_source,
         "sources": status,
     }
 
