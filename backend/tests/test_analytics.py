@@ -1,13 +1,19 @@
-"""Tests for GET /api/jobs/analytics — DB-driven discovery analytics.
+"""Tests for GET /api/jobs/analytics — aggregator-driven discovery analytics.
 
-Verifies that the endpoint reads live Application rows from PostgreSQL
-(not from a cached aggregator.search() call), so the cards always reflect
-what the user has actually tracked.
+Verifies that the endpoint reflects what the aggregator.search() returned
+(the same source the scanner engine uses), NOT the Application table.
+
+The previous broken implementation (a5dc986) read the Application table.
+That caused "Jobs Discovered" to stay frozen when a scan found jobs that were
+all already tracked — 0 new Application rows → count unchanged even though
+the providers returned 169 fresh openings.
 """
 import pytest
 
 from app.database import SessionLocal
-from app.models import Application, User
+from app.jobs import aggregator
+from app.jobs.base import RawJob
+from app.models import User
 from app.security import hash_password, issue_tokens
 
 
@@ -15,18 +21,31 @@ def H(tok):
     return {"Authorization": f"Bearer {tok}"}
 
 
+def _make_jobs(*specs) -> list:
+    """Build a list of RawJob.to_dict() from (source, title, location) tuples."""
+    out = []
+    for i, (source, title, location) in enumerate(specs):
+        out.append(RawJob(
+            source=source, title=title, company=f"Co{i}",
+            apply_url=f"https://boards.greenhouse.io/co{i}/jobs/{i}",
+            location=location, remote="remote" in location.lower(),
+            external_id=f"ext-{i}",
+        ).to_dict())
+    return out
+
+
 @pytest.fixture(scope="module")
 def analytics_token(client):
-    """Approved user with a clean application set for analytics assertions."""
+    """Approved user with no pre-existing applications so counts are clean."""
     db = SessionLocal()
     try:
-        email = "analytics_user@example.com"
+        email = "analytics2_user@example.com"
         u = db.query(User).filter_by(email=email).first()
         if not u:
             u = User(
-                full_name="Analytics User",
+                full_name="Analytics2 User",
                 email=email,
-                hashed_password=hash_password("AnalyticsTest123"),
+                hashed_password=hash_password("Analytics2Test123"),
                 status="approved",
                 is_admin=False,
                 seeker_type="student",
@@ -36,87 +55,81 @@ def analytics_token(client):
             db.add(u)
             db.commit()
             db.refresh(u)
-
-        # Wipe any applications left from previous runs so counts are deterministic.
-        db.query(Application).filter_by(user_id=u.id).delete()
-        db.commit()
-
-        # Seed known applications directly in the DB (bypass the API so we control
-        # every field, including match_score and job_title).
-        apps = [
-            Application(user_id=u.id, portal="Greenhouse", source="Greenhouse",
-                        job_title="Software Engineer Intern", company="Stripe",
-                        apply_url="https://boards.greenhouse.io/stripe/jobs/1",
-                        job_url_hash="hash-intern-1", match_score=80,
-                        status="Tracked", submission_status="Draft"),
-            Application(user_id=u.id, portal="Lever", source="Lever",
-                        job_title="New Grad Software Engineer", company="Ro",
-                        apply_url="https://jobs.lever.co/ro/abc",
-                        job_url_hash="hash-fresher-1", match_score=70,
-                        status="Tracked", submission_status="Draft"),
-            Application(user_id=u.id, portal="Jooble", source="Jooble",
-                        job_title="Machine Learning Engineer", company="DeepMind",
-                        apply_url="https://jooble.org/desc/ml-1",
-                        job_url_hash="hash-aiml-1", match_score=90,
-                        status="Tracked", submission_status="Draft"),
-            Application(user_id=u.id, portal="Remotive", source="Remotive",
-                        job_title="Backend Developer", company="Acme",
-                        apply_url="https://remotive.com/remote-jobs/backend/1",
-                        job_url_hash="hash-job-1", match_score=30,
-                        status="Tracked", submission_status="Draft"),
-        ]
-        for a in apps:
-            db.add(a)
-        db.commit()
-
         return issue_tokens(u)["access_token"]
     finally:
         db.close()
 
 
-def test_analytics_reads_from_db(client, analytics_token):
-    """The endpoint returns counts that exactly match what is in the Application table."""
+@pytest.fixture()
+def stub_aggregator(monkeypatch):
+    """Stub aggregator.search() with a deterministic set of jobs.
+
+    4 jobs total:
+      - 2 Greenhouse (1 intern, 1 ML Engineer → ai_ml)
+      - 1 Lever     (New Grad → fresher)
+      - 1 Remotive  (plain Backend Developer)
+    """
+    jobs = _make_jobs(
+        ("Greenhouse", "Software Engineer Intern", "Bangalore, India"),
+        ("Greenhouse", "Machine Learning Engineer", "Remote"),
+        ("Lever",      "New Grad Software Engineer", "Hyderabad, India"),
+        ("Remotive",   "Backend Developer", "Remote"),
+    )
+
+    async def fake_search(*a, **k):
+        return jobs
+
+    monkeypatch.setattr(aggregator, "search", fake_search)
+    return jobs
+
+
+def test_analytics_counts_from_aggregator_not_application_table(
+    client, analytics_token, stub_aggregator
+):
+    """jobs_discovered must equal the number of jobs returned by aggregator.search(),
+    regardless of how many Application rows exist for this user."""
     r = client.get("/api/jobs/analytics", headers=H(analytics_token))
     assert r.status_code == 200, r.text
     data = r.json()
 
-    # 4 seeded applications total.
-    assert data["jobs_discovered"] == 4
+    # aggregator returned 4 jobs → analytics must show 4
+    assert data["jobs_discovered"] == 4, (
+        f"Expected 4 (aggregator count), got {data['jobs_discovered']}. "
+        "If this shows the Application table count the fix is incomplete."
+    )
 
-    # Employment-type breakdown from job titles.
+
+def test_analytics_employment_type_breakdown(client, analytics_token, stub_aggregator):
+    """Internship and fresher counts are derived from aggregator job titles."""
+    r = client.get("/api/jobs/analytics", headers=H(analytics_token))
+    data = r.json()
+
     assert data["internships"] == 1   # "Software Engineer Intern"
     assert data["freshers"] == 1      # "New Grad Software Engineer"
 
-    # AI/ML count from job title signal.
+
+def test_analytics_ai_ml_count(client, analytics_token, stub_aggregator):
+    """AI/ML count uses is_ai_ml(title, snippet) on aggregator results."""
+    r = client.get("/api/jobs/analytics", headers=H(analytics_token))
+    data = r.json()
+
     assert data["ai_ml"] == 1         # "Machine Learning Engineer"
 
 
-def test_analytics_coverage_uses_match_score(client, analytics_token):
-    """Coverage = fraction of tracked jobs meeting min_match threshold (default 50)."""
+def test_analytics_by_source_from_aggregator(client, analytics_token, stub_aggregator):
+    """by_source reflects provider breakdown in aggregator results."""
     r = client.get("/api/jobs/analytics", headers=H(analytics_token))
-    assert r.status_code == 200, r.text
     data = r.json()
+    by_source = data["by_source"]
 
-    # 3 of 4 apps have match_score >= 50 (80, 70, 90 qualify; 30 does not).
-    assert data["coverage_percentage"] == 75
-
-
-def test_analytics_by_source_breakdown(client, analytics_token):
-    """by_source groups application counts by the source column."""
-    r = client.get("/api/jobs/analytics", headers=H(analytics_token))
-    assert r.status_code == 200, r.text
-    by_source = r.json()["by_source"]
-
-    assert by_source.get("Greenhouse") == 1
+    assert by_source.get("Greenhouse") == 2
     assert by_source.get("Lever") == 1
-    assert by_source.get("Jooble") == 1
     assert by_source.get("Remotive") == 1
 
 
-def test_analytics_provider_status_included(client, analytics_token):
-    """Provider connectivity fields are always present."""
+def test_analytics_provider_status_always_present(client, analytics_token, stub_aggregator):
+    """live_providers, total_providers, last_sync are always in the response."""
     r = client.get("/api/jobs/analytics", headers=H(analytics_token))
-    assert r.status_code == 200, r.text
     data = r.json()
 
     assert "live_providers" in data
@@ -125,28 +138,38 @@ def test_analytics_provider_status_included(client, analytics_token):
     assert "last_sync" in data
 
 
-def test_analytics_reflects_new_application_immediately(client, analytics_token):
-    """Adding an application to the DB is reflected on the next analytics call
-    — there is no cache layer between the endpoint and the database."""
-    r_before = client.get("/api/jobs/analytics", headers=H(analytics_token))
-    count_before = r_before.json()["jobs_discovered"]
+def test_analytics_reflects_new_aggregator_results_immediately(
+    client, analytics_token, monkeypatch
+):
+    """Changing what aggregator.search() returns immediately changes the analytics
+    response — there is no Application-table or response cache hiding stale values."""
+    # First call: 2 jobs
+    jobs_small = _make_jobs(
+        ("Greenhouse", "Data Scientist", "Remote"),
+        ("Lever",      "ML Intern", "Bangalore, India"),
+    )
 
-    # Insert one more application directly.
-    db = SessionLocal()
-    try:
-        from app.models import User as _User
-        u = db.query(_User).filter_by(email="analytics_user@example.com").first()
-        extra = Application(
-            user_id=u.id, portal="Arbeitnow", source="Arbeitnow",
-            job_title="Data Analyst", company="NewCo",
-            apply_url="https://arbeitnow.com/view/data-analyst-newco-1",
-            job_url_hash="hash-extra-1", match_score=60,
-            status="Tracked", submission_status="Draft",
-        )
-        db.add(extra)
-        db.commit()
-    finally:
-        db.close()
+    async def fake_small(*a, **k):
+        return jobs_small
 
-    r_after = client.get("/api/jobs/analytics", headers=H(analytics_token))
-    assert r_after.json()["jobs_discovered"] == count_before + 1
+    monkeypatch.setattr(aggregator, "search", fake_small)
+    r1 = client.get("/api/jobs/analytics", headers=H(analytics_token))
+    assert r1.json()["jobs_discovered"] == 2
+
+    # Second call: 5 jobs (simulates a new scan with more results)
+    jobs_large = _make_jobs(
+        ("Greenhouse", "Data Scientist", "Remote"),
+        ("Greenhouse", "ML Engineer", "Bangalore, India"),
+        ("Lever",      "ML Intern", "Hyderabad, India"),
+        ("Remotive",   "AI Researcher", "Remote"),
+        ("Jooble",     "Backend Developer", "Chennai, India"),
+    )
+
+    async def fake_large(*a, **k):
+        return jobs_large
+
+    monkeypatch.setattr(aggregator, "search", fake_large)
+    r2 = client.get("/api/jobs/analytics", headers=H(analytics_token))
+    assert r2.json()["jobs_discovered"] == 5, (
+        "Analytics must reflect the current aggregator result, not a cached/DB value"
+    )

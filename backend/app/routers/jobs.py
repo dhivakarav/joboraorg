@@ -123,56 +123,75 @@ def internshala_link(q: str = Query(""), location: str = Query("India"),
 
 
 @router.get("/analytics")
-def discovery_analytics(
+async def discovery_analytics(
+    refresh: bool = Query(False, description="bypass cache + pull freshest postings"),
     user: User = Depends(get_approved_user),
     db: Session = Depends(get_db),
 ):
-    """Dashboard analytics calculated directly from the Application rows stored
-    in PostgreSQL for the current user. Updates after every scan with no caching.
+    """Job Discovery Analytics: counts from the same aggregator.search() call the
+    scanner uses, not from the Application table.
 
-    Previous implementation called aggregator.search() (a live external API call
-    cached for 15 min) and counted from those results. This meant the cards never
-    reflected what was actually stored in the database — the values were frozen
-    until the TTL expired and always based on a different query than the scan used.
+    Root cause of the previous bug (a5dc986): the endpoint was reading the Application
+    table (cumulative tracking history) instead of the aggregator results (what
+    providers actually discovered this scan). When all matched jobs were already
+    tracked from a prior scan, 0 new Application rows were added and the cards never
+    changed — even though the providers returned 169 fresh openings.
+
+    Fix: call aggregator.search() with the user's own profile parameters (identical
+    to what the engine does) and use_cache=True so it hits the scanner's warm cache
+    with zero extra network calls. ?refresh=true forces a live re-fetch.
     """
     from datetime import datetime, timezone
-    from sqlalchemy import func
     from ..jobs.base import infer_employment_type
     from ..jobs.matching import is_ai_ml
 
-    # ── 1. Count all applications this user has tracked/discovered ─────────────
-    apps = db.query(Application).filter(Application.user_id == user.id).all()
-    total = len(apps)
+    # ── 1. Load the user's scan parameters (mirrors engine._load_context) ──────
+    profile = _load_profile(db, user, materialize=False)
+    filt = db.query(JobFilter).filter_by(user_id=user.id).first()
+    roles = profile.get("roles", [])
+    keywords = profile.get("keywords", [])
+    locations = profile.get("locations", [])
+    min_match = (filt.min_match_score if (filt and filt.min_match_score is not None) else 50) or 0
+    # Build the search query the same way the engine does.
+    query = " ".join(roles[:3]) or user.job_title or "software engineer"
+    location = locations[0] if locations else ""
 
+    # ── 2. Fetch from aggregator using the user's real params ─────────────────
+    # use_cache=True → hits the scanner's warm cache instantly (no extra API calls).
+    # ?refresh=true  → forces a live re-fetch from all providers.
+    jobs = await aggregator.search(
+        query=query, location=location, keywords=keywords,
+        limit=300, use_cache=not refresh,
+    )
+
+    # ── 3. Score and count categories (same logic as the scanner engine) ───────
     internships = 0
     freshers = 0
     ai_ml_count = 0
-    for a in apps:
-        title = a.job_title or ""
-        et = infer_employment_type(title)
+    matched = 0
+    by_source: dict = {}
+
+    for j in jobs:
+        title = j.get("title", "")
+        snippet = j.get("description_snippet", "")
+        source = j.get("source", "")
+
+        et = j.get("employment_type") or infer_employment_type(title)
         if et == "internship":
             internships += 1
         elif et == "fresher":
             freshers += 1
-        if is_ai_ml(title):
+        if is_ai_ml(title, snippet):
             ai_ml_count += 1
+        if score_job(j, profile)["score"] >= min_match:
+            matched += 1
+        if source:
+            by_source[source] = by_source.get(source, 0) + 1
 
-    # ── 2. Coverage: jobs that meet the user's match-score threshold ───────────
-    # Coverage = (jobs with match_score >= min_match) / total * 100
-    min_match = db.query(JobFilter.min_match_score).filter_by(user_id=user.id).scalar() or 50
-    matched = sum(1 for a in apps if (a.match_score or 0) >= min_match)
+    total = len(jobs)
     coverage_pct = round(100 * matched / total) if total else 0
 
-    # ── 3. Breakdown by job source (from the DB, not the API) ─────────────────
-    source_rows = (
-        db.query(Application.source, func.count(Application.id))
-        .filter(Application.user_id == user.id)
-        .group_by(Application.source)
-        .all()
-    )
-    by_source = {src: cnt for src, cnt in source_rows if src}
-
-    # ── 4. Provider connectivity (static, no external calls) ──────────────────
+    # ── 4. Provider connectivity ───────────────────────────────────────────────
     status = aggregator.provider_status()
     live = [s for s in status if s.get("status") == "Connected"]
 
