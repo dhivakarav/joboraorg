@@ -79,9 +79,16 @@ def prepare_assisted(payload: dict, user: User = Depends(get_approved_user),
                             detail=f"Assisted Apply supports {'/'.join(_ASSISTED_PLATFORMS)}; "
                                    f"got {adapter.platform}")
 
-    profile = load_profile(db, user)
-    if not profile.get("resume_path"):
+    # prepare only needs text fields (name/email/phone) and the resume filename —
+    # not the actual PDF. materialize=False avoids creating a temp file here.
+    profile = load_profile(db, user, materialize=False)
+
+    # Check resume exists via DB rather than a materialized path.
+    from ..models import Resume as _Resume
+    resume_rec = db.query(_Resume).filter_by(user_id=user.id).first()
+    if not resume_rec:
         raise HTTPException(status_code=400, detail="Upload a resume before applying")
+    resume_filename = (resume_rec.file_path or "").split("/")[-1]
 
     fp = job.get("fingerprint") or job.get("apply_url")
     app = db.query(Application).filter_by(user_id=user.id, job_url_hash=fp).first()
@@ -103,9 +110,17 @@ def prepare_assisted(payload: dict, user: User = Depends(get_approved_user),
     analytics.capture(analytics.MANUAL_APPLY, user.id,
                       {"platform": adapter.platform, "mode": "assisted"})
 
-    prefill = _prefill_from_profile(profile)
+    prefill = {
+        "full_name": profile.get("name", ""),
+        "email": profile.get("email", ""),
+        "phone": profile.get("phone", ""),
+        "linkedin": profile.get("linkedin_url", ""),
+        "portfolio": profile.get("portfolio_url", ""),
+        "location": profile.get("location", "") or (profile.get("locations") or [""])[0],
+        "resume_filename": resume_filename,
+        "has_resume": True,
+    }
     captcha = _PLATFORM_CAPTCHA.get(adapter.platform, "")
-    # Standard required fields these portals always ask (prefilled from the profile).
     required_fields = [
         {"label": "Full name", "value": prefill["full_name"], "required": True},
         {"label": "Email", "value": prefill["email"], "required": True},
@@ -120,12 +135,12 @@ def prepare_assisted(payload: dict, user: User = Depends(get_approved_user),
         "apply_url": job["apply_url"],
         "prefill": prefill,
         "required_fields": required_fields,
-        "resume_filename": prefill["resume_filename"],
+        "resume_filename": resume_filename,
         "captcha": captcha,
         "captcha_note": _PLATFORM_NOTE.get(adapter.platform, ""),
         "screening_note": (
             f"This {adapter.platform} posting may include screening questions "
-            "(e.g. work authorization, “why this role”). Answer them truthfully on "
+            "(e.g. work authorization, \"why this role\"). Answer them truthfully on "
             "the portal — Jobora never auto-fills answers under your name."),
         "instructions": [
             "Review the details Jobora prepared from your profile.",

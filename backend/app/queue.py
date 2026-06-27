@@ -121,7 +121,7 @@ async def _run_platform_submit(platform: str, app, payload: dict, answers: dict,
 async def process_submission(app_id: int):
     """Process one queued application: fill + submit + verify + persist."""
     from .adapters.runtime import live_ready
-    from .services import load_profile
+    from .services import cleanup_profile_resources, load_profile
     from .storage import storage
 
     db = SessionLocal()
@@ -149,9 +149,12 @@ async def process_submission(app_id: int):
             return
 
         profile = load_profile(db, user)
-        evidence_dir = str(settings.UPLOAD_DIR / "evidence" / str(app.id))
-        outcome = await _run_platform_submit(app.platform or "Greenhouse", app, payload,
-                                             answers, profile, evidence_dir)
+        try:
+            evidence_dir = str(settings.UPLOAD_DIR / "evidence" / str(app.id))
+            outcome = await _run_platform_submit(app.platform or "Greenhouse", app, payload,
+                                                 answers, profile, evidence_dir)
+        finally:
+            cleanup_profile_resources(profile)
 
         # Push evidence to storage (works for local + S3).
         ev = json.loads(outcome.evidence_json())

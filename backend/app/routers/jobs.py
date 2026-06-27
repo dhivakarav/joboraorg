@@ -46,6 +46,7 @@ from ..schemas import (
 from .. import credentials as creds
 
 from ..queue import enqueue as enqueue_submission  # noqa: E402
+from ..services import cleanup_profile_resources as _cleanup_profile  # noqa: E402
 from ..services import load_profile as _load_profile  # noqa: E402
 from ..services import profile_complete as _profile_complete  # noqa: E402
 
@@ -194,7 +195,9 @@ async def search_jobs(
     db: Session = Depends(get_db),
 ):
     enforce("search", str(user.id), settings.RL_SEARCH_PER_MIN, 60)
-    profile = _load_profile(db, user)
+    # Search only needs the text fields of the profile (skills, keywords, etc.)
+    # for scoring — no resume file is read or uploaded here, so skip materialization.
+    profile = _load_profile(db, user, materialize=False)
     keywords = profile["keywords"]
     # The query the USER actually typed (before we default it from their profile).
     # Drives query-relevant scoring + a strict title filter so e.g. "data engineer"
@@ -400,24 +403,27 @@ def prepare_application(
     frontend can show a review-and-approve screen.
     """
     profile = _load_profile(db, user)
-    if not profile["resume_path"]:
-        raise HTTPException(status_code=400, detail="Upload your resume first so we can prepare the application")
+    try:
+        if not profile["resume_path"]:
+            raise HTTPException(status_code=400, detail="Upload your resume first so we can prepare the application")
 
-    job_dict = job.model_dump()
-    adapter = adapter_for(job_dict)
-    package = adapter.build_package(profile, job_dict, profile["resume_path"])
-    match = score_job(job_dict, profile)
-    from .. import analytics
-    analytics.capture(analytics.JOB_CLICK, user.id,
-                      {"platform": adapter.platform, "company": job_dict.get("company", "")})
-    return {
-        "platform": adapter.platform,
-        "auto_submit": adapter.supports_auto_submit,
-        "manual_required": adapter.manual_only,
-        "match_score": match["score"],
-        "match_reasons": match["reasons"],
-        "package": package.to_dict(),
-    }
+        job_dict = job.model_dump()
+        adapter = adapter_for(job_dict)
+        package = adapter.build_package(profile, job_dict, profile["resume_path"])
+        match = score_job(job_dict, profile)
+        from .. import analytics
+        analytics.capture(analytics.JOB_CLICK, user.id,
+                          {"platform": adapter.platform, "company": job_dict.get("company", "")})
+        return {
+            "platform": adapter.platform,
+            "auto_submit": adapter.supports_auto_submit,
+            "manual_required": adapter.manual_only,
+            "match_score": match["score"],
+            "match_reasons": match["reasons"],
+            "package": package.to_dict(),
+        }
+    finally:
+        _cleanup_profile(profile)
 
 
 @router.post("/submit")
@@ -433,80 +439,78 @@ async def submit_application(
     job = data.job.model_dump()
     adapter = adapter_for(job)
     profile = _load_profile(db, user)
-    package = adapter.build_package(profile, job, profile["resume_path"])
+    try:
+        package = adapter.build_package(profile, job, profile["resume_path"])
 
-    # Perform the platform action (manual-only → no-op; capable → live/opt-in).
-    result = await adapter.submit(package, data.answers or {})
+        # Perform the platform action (manual-only → no-op; capable → live/opt-in).
+        result = await adapter.submit(package, data.answers or {})
 
-    # Canonical, evidence-honest statuses. This endpoint records intent/attempt;
-    # it never produces "Verified Submitted" (that requires the evidence pipeline)
-    # and never writes the retired "Applied" label.
-    if result.get("submitted"):
-        status, sub = "Submitted", "Submitted"   # confirmation detected
-    elif result.get("manual_required"):
-        status, sub = "Pending", "Manual Apply"   # user must finish on the platform
-    elif result.get("failed"):
-        # A live attempt that reached the page but never confirmed (e.g. no form
-        # found) is a FAILURE, never a silent "Submitted"/"Tracked".
-        status, sub = "Pending", "Failed"
-    else:
-        status, sub = "Tracked", "Draft"          # prepared + approved (live submission disabled)
+        if result.get("submitted"):
+            status, sub = "Submitted", "Submitted"
+        elif result.get("manual_required"):
+            status, sub = "Pending", "Manual Apply"
+        elif result.get("failed"):
+            status, sub = "Pending", "Failed"
+        else:
+            status, sub = "Tracked", "Draft"
 
-    match = score_job(job, profile)
-    existing = (
-        db.query(Application).filter_by(user_id=user.id, job_url_hash=job["fingerprint"]).first()
-    )
-    if existing:
-        existing.status = status
-        existing.submission_status = sub
-        existing.platform = adapter.platform
-        existing.manual_required = adapter.manual_only
-        existing.match_score = match["score"]
-        existing.salary_inr = job.get("salary_inr", "")
-        db.commit()
-        app = existing
-    else:
-        app = Application(
-            user_id=user.id,
-            portal=job["source"],
-            source=job["source"],
-            platform=adapter.platform,
-            job_title=job["title"],
-            company=job["company"],
-            location=job.get("location", ""),
-            salary=job.get("salary", ""),
-            salary_inr=job.get("salary_inr", ""),
-            apply_url=job["apply_url"],
-            verified=job.get("verified", False),
-            match_score=match["score"],
-            manual_required=adapter.manual_only,
-            job_url_hash=job["fingerprint"],
-            status=status,
-            submission_status=sub,
+        match = score_job(job, profile)
+        existing = (
+            db.query(Application).filter_by(user_id=user.id, job_url_hash=job["fingerprint"]).first()
         )
-        db.add(app)
-        db.commit()
-        db.refresh(app)
+        if existing:
+            existing.status = status
+            existing.submission_status = sub
+            existing.platform = adapter.platform
+            existing.manual_required = adapter.manual_only
+            existing.match_score = match["score"]
+            existing.salary_inr = job.get("salary_inr", "")
+            db.commit()
+            app = existing
+        else:
+            app = Application(
+                user_id=user.id,
+                portal=job["source"],
+                source=job["source"],
+                platform=adapter.platform,
+                job_title=job["title"],
+                company=job["company"],
+                location=job.get("location", ""),
+                salary=job.get("salary", ""),
+                salary_inr=job.get("salary_inr", ""),
+                apply_url=job["apply_url"],
+                verified=job.get("verified", False),
+                match_score=match["score"],
+                manual_required=adapter.manual_only,
+                job_url_hash=job["fingerprint"],
+                status=status,
+                submission_status=sub,
+            )
+            db.add(app)
+            db.commit()
+            db.refresh(app)
 
-    notifications.application_recorded(user.email, user.full_name, job["title"],
-                                       job["company"], status)
+        notifications.application_recorded(user.email, user.full_name, job["title"],
+                                           job["company"], status)
 
-    from .. import analytics
-    analytics.capture(analytics.APPLICATION_STARTED, user.id,
-                      {"platform": adapter.platform, "company": job.get("company", "")})
-    if result.get("submitted"):
-        analytics.capture(analytics.APPLICATION_SUBMITTED, user.id,
-                          {"platform": adapter.platform})
-    elif result.get("manual_required"):
-        analytics.capture(analytics.MANUAL_APPLY, user.id, {"platform": adapter.platform})
+        from .. import analytics
+        analytics.capture(analytics.APPLICATION_STARTED, user.id,
+                          {"platform": adapter.platform, "company": job.get("company", "")})
+        if result.get("submitted"):
+            analytics.capture(analytics.APPLICATION_SUBMITTED, user.id,
+                              {"platform": adapter.platform})
+        elif result.get("manual_required"):
+            analytics.capture(analytics.MANUAL_APPLY, user.id, {"platform": adapter.platform})
 
-    return {
-        "message": result.get("message", "Application recorded"),
-        "status": status,
-        "manual_required": adapter.manual_only,
-        "apply_url": job["apply_url"],
-        "application_id": app.id,
-    }
+        return {
+            "message": result.get("message", "Application recorded"),
+            "status": status,
+            "manual_required": adapter.manual_only,
+            "apply_url": job["apply_url"],
+            "application_id": app.id,
+        }
+    finally:
+        _cleanup_profile(profile)
 
 
 @router.post("/apply")
@@ -574,7 +578,8 @@ def greenhouse_form(
     except Exception:
         raise HTTPException(status_code=502, detail="Could not load the Greenhouse application form")
 
-    profile = _load_profile(db, user)
+    # greenhouse_form only needs profile identity fields + filename (not the PDF).
+    profile = _load_profile(db, user, materialize=False)
     ok, missing = _profile_complete(profile)
     skip = CORE_TEXT | {"resume", "resume_text", "cover_letter", "cover_letter_text"}
 
@@ -583,7 +588,10 @@ def greenhouse_form(
                 "values": [{"label": l, "value": v} for l, v in (f.values or [])]}
 
     qs = [q(f) for f in fields if f.name and f.name not in skip]
-    rf = (profile.get("resume_path") or "").split("/")[-1]
+    # For the form preview, show the stored filename from the DB path, not the tmp path.
+    from ..models import Resume as _Resume
+    _res = db.query(_Resume).filter_by(user_id=user.id).first()
+    rf = (_res.file_path.split("/")[-1] if _res and _res.file_path else "")
     return {
         "title": title or data.title,
         "company": data.company,
@@ -625,11 +633,17 @@ async def greenhouse_apply(
         raise HTTPException(status_code=400, detail="Could not resolve the Greenhouse application form URL")
 
     # Gate 3 — real resume + complete profile.
-    profile = _load_profile(db, user)
-    ok, missing = _profile_complete(profile)
-    if not ok:
+    # The queue worker materializes its own copy; here we only validate identity
+    # fields and confirm a resume is stored (no temp file needed at this stage).
+    profile = _load_profile(db, user, materialize=False)
+    identity_missing = [k for k in ("name", "email", "phone")
+                        if not (profile.get(k) or "").strip()]
+    if identity_missing:
         raise HTTPException(status_code=400,
-                            detail=f"Complete your profile before applying. Missing: {', '.join(missing)}")
+                            detail=f"Complete your profile before applying. Missing: {', '.join(identity_missing)}")
+    from ..models import Resume as _Resume
+    if not db.query(_Resume).filter_by(user_id=user.id).first():
+        raise HTTPException(status_code=400, detail="Upload a resume before applying")
 
     # Upsert the application row and ENQUEUE it. The browser submission runs in a
     # background worker (concurrency-capped, retried) — never inline in this
@@ -747,9 +761,9 @@ async def internshala_apply(data: InternshalaApplyIn,
         raise HTTPException(status_code=400,
                             detail="Provide a cover letter you've reviewed — Internshala requires one.")
 
-    # Gate 6 — real resume + complete profile.
-    profile = _load_profile(db, user)
-    if not profile.get("resume_path"):
+    # Gate 6 — real resume exists in storage (worker materializes its own copy).
+    from ..models import Resume as _Resume2
+    if not db.query(_Resume2).filter_by(user_id=user.id).first():
         raise HTTPException(status_code=400, detail="Upload a resume before applying")
 
     # Upsert + enqueue. Browser submission runs in the background worker.
