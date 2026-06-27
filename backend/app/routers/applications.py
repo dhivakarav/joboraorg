@@ -92,6 +92,32 @@ def update_status(
     return app
 
 
+@router.delete("/{app_id}", status_code=204)
+def delete_application(
+    app_id: int,
+    user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Remove a tracked application from the user's Activity Log.
+
+    Only Draft/Tracked/Saved/Skipped rows may be deleted — applications that
+    are Queued, Processing, Submitted, or Verified Submitted cannot be deleted
+    because they represent real in-flight or completed submissions.
+    """
+    app = db.query(Application).filter_by(id=app_id, user_id=user.id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if app.display_status in ("Queued", "Processing", "Submitted",
+                              "Verified Submitted", "Submitted (Unverified)"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete an application with status '{app.display_status}'. "
+                   "Only Draft, Tracked, Saved, Skipped, Manual Apply, and Failed "
+                   "entries can be removed.")
+    db.delete(app)
+    db.commit()
+
+
 def _owned_app(db: Session, user: User, app_id: int) -> Application:
     app = db.query(Application).filter_by(id=app_id, user_id=user.id).first()
     if not app:
