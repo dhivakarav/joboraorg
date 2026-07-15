@@ -47,7 +47,113 @@ def _get_client():
 
 
 def available() -> bool:
-    return _get_client() is not None
+    """True if ANY text-capable provider is configured (Anthropic or a free LLM)."""
+    return _get_client() is not None or _any_free_llm_configured()
+
+
+def _any_free_llm_configured() -> bool:
+    return bool(
+        settings.GROQ_API_KEY or settings.GEMINI_API_KEY
+        or settings.OPENROUTER_API_KEY or settings.CEREBRAS_API_KEY
+    )
+
+
+# ── Free LLM providers (tried in order after Anthropic) ────────────────────────
+# All via plain HTTP (httpx) so no extra SDKs are needed. Each returns the text
+# on success or None on any failure, so generate_text() can fall through to the
+# next provider and finally to the caller's heuristic fallback.
+
+def _openai_compatible_chat(base_url: str, api_key: str, model: str,
+                            system: str, task: str, max_tokens: int,
+                            extra_headers: Optional[dict] = None) -> Optional[str]:
+    """Groq / OpenRouter / Cerebras all speak the OpenAI /chat/completions API."""
+    import httpx
+    try:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        if extra_headers:
+            headers.update(extra_headers)
+        resp = httpx.post(
+            f"{base_url}/chat/completions",
+            headers=headers,
+            json={
+                "model": model,
+                "max_tokens": max_tokens,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": task},
+                ],
+            },
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        return (resp.json()["choices"][0]["message"]["content"] or "").strip() or None
+    except Exception as exc:
+        print(f"[ai] {base_url} failed: {exc}")
+        return None
+
+
+def _gemini_chat(api_key: str, model: str, system: str, task: str,
+                 max_tokens: int) -> Optional[str]:
+    """Google Gemini REST API (generateContent)."""
+    import httpx
+    try:
+        resp = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            params={"key": api_key},
+            json={
+                "system_instruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": task}]}],
+                "generationConfig": {"maxOutputTokens": max_tokens},
+            },
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        cands = resp.json().get("candidates", [])
+        if not cands:
+            return None
+        parts = cands[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts).strip()
+        return text or None
+    except Exception as exc:
+        print(f"[ai] gemini failed: {exc}")
+        return None
+
+
+def _free_llm_generate(system: str, task: str, max_tokens: int) -> Optional[str]:
+    """Try each configured free provider in order; return the first success."""
+    if settings.GROQ_API_KEY:
+        t = _openai_compatible_chat("https://api.groq.com/openai/v1",
+                                    settings.GROQ_API_KEY, settings.GROQ_MODEL,
+                                    system, task, max_tokens)
+        if t:
+            return t
+    if settings.GEMINI_API_KEY:
+        t = _gemini_chat(settings.GEMINI_API_KEY, settings.GEMINI_MODEL,
+                         system, task, max_tokens)
+        if t:
+            return t
+    if settings.OPENROUTER_API_KEY:
+        t = _openai_compatible_chat("https://openrouter.ai/api/v1",
+                                    settings.OPENROUTER_API_KEY, settings.OPENROUTER_MODEL,
+                                    system, task, max_tokens,
+                                    extra_headers={"HTTP-Referer": "https://jobora.app",
+                                                   "X-Title": "Jobora"})
+        if t:
+            return t
+    if settings.CEREBRAS_API_KEY:
+        t = _openai_compatible_chat("https://api.cerebras.ai/v1",
+                                    settings.CEREBRAS_API_KEY, settings.CEREBRAS_MODEL,
+                                    system, task, max_tokens)
+        if t:
+            return t
+    return None
+
+
+def _plain_system(resume_text: str) -> str:
+    """Flat system prompt for the free (OpenAI/Gemini) providers."""
+    if resume_text:
+        return _PERSONA + "\n\nCANDIDATE RESUME (verbatim):\n\n" + resume_text
+    return _PERSONA
 
 
 def _system_blocks(resume_text: str) -> list:
@@ -66,24 +172,33 @@ def _system_blocks(resume_text: str) -> list:
 
 def generate_text(task: str, resume_text: str = "", max_tokens: int = 2048,
                   thinking: bool = False) -> Optional[str]:
-    """Single-shot text generation. Returns None if AI is unavailable/errors."""
+    """Single-shot text generation.
+
+    Provider order: Anthropic Claude → Groq → Gemini → OpenRouter → Cerebras.
+    Returns the first success, or None if no provider is configured/all fail
+    (callers then use their built-in heuristic fallback).
+    """
     client = _get_client()
-    if client is None:
-        return None
-    try:
-        kwargs = dict(
-            model=settings.AI_MODEL,
-            max_tokens=max_tokens,
-            system=_system_blocks(resume_text),
-            messages=[{"role": "user", "content": task}],
-        )
-        if thinking:
-            kwargs["thinking"] = {"type": "adaptive"}
-        resp = client.messages.create(**kwargs)
-        return "".join(b.text for b in resp.content if b.type == "text").strip()
-    except Exception as exc:
-        print(f"[ai] generate_text failed: {exc}")
-        return None
+    if client is not None:
+        try:
+            kwargs = dict(
+                model=settings.AI_MODEL,
+                max_tokens=max_tokens,
+                system=_system_blocks(resume_text),
+                messages=[{"role": "user", "content": task}],
+            )
+            if thinking:
+                kwargs["thinking"] = {"type": "adaptive"}
+            resp = client.messages.create(**kwargs)
+            text = "".join(b.text for b in resp.content if b.type == "text").strip()
+            if text:
+                return text
+        except Exception as exc:
+            print(f"[ai] anthropic generate_text failed: {exc}")
+            # fall through to free providers
+
+    # Free-tier providers (no credit card) — first configured one that answers wins.
+    return _free_llm_generate(_plain_system(resume_text), task, max_tokens)
 
 
 def generate_structured(task: str, schema: Type, resume_text: str = "",

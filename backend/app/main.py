@@ -75,6 +75,9 @@ async def lifespan(app: FastAPI):
     # Start the in-process submission worker (no-op if INPROCESS_WORKER=0 / using RQ).
     from .queue import start_worker
     start_worker()
+    # Start the crawl-and-store engine (no-op unless CRAWLER_ENABLED=1).
+    from .jobs.crawler import start_crawler
+    start_crawler()
     yield
 
 
@@ -205,7 +208,23 @@ def ready():
     from sqlalchemy import text
 
     from .adapters.runtime import live_ready
+    from .ai.client import available as ai_available
     from .cache import cache
+
+    def _ai_provider() -> str:
+        if settings.ANTHROPIC_API_KEY:
+            return "anthropic"
+        if settings.GROQ_API_KEY:
+            return "groq"
+        if settings.GEMINI_API_KEY:
+            return "gemini"
+        if settings.OPENROUTER_API_KEY:
+            return "openrouter"
+        if settings.CEREBRAS_API_KEY:
+            return "cerebras"
+        return "heuristic"
+
+    _ai_available = ai_available
 
     db_ok = True
     try:
@@ -221,6 +240,6 @@ def ready():
         "database": {"ok": db_ok, "engine": engine.url.get_backend_name()},
         "cache": {"backend": cache.backend},
         "email": {"backend": "smtp" if settings.SMTP_HOST else "console"},
-        "ai": {"enabled": bool(settings.ANTHROPIC_API_KEY)},
+        "ai": {"enabled": _ai_available(), "provider": _ai_provider()},
         "live_apply": {"ready": live_ok, "reason": live_reason},
     }

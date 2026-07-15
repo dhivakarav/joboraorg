@@ -233,3 +233,37 @@ class PlatformCredential(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+
+class CrawledJob(Base):
+    """A job persisted by the background crawl-and-store engine.
+
+    The crawler repeatedly queries the free provider APIs across many
+    (query × country) combos and upserts every UNIQUE job here (dedup by
+    url_hash = normalized apply URL). This accumulates a large pool over time
+    (10k+), while search surfaces only the top few hundred by match score —
+    the rest stay stored/hidden. Global (not per-user): scoring is applied
+    per-request against the requesting user's resume.
+    """
+    __tablename__ = "crawled_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    url_hash = Column(String(64), unique=True, index=True, nullable=False)  # dedup key
+    title = Column(String, default="", index=True)
+    company = Column(String, default="", index=True)
+    location = Column(String, default="", index=True)
+    country = Column(String, default="", index=True)   # crawl bucket: in/us/gb/sg/ae/remote…
+    description = Column(Text, default="")
+    salary = Column(String, default="")
+    employment_type = Column(String, default="", index=True)
+    source = Column(String, default="", index=True)    # provider name
+    apply_url = Column(Text, default="")
+    remote = Column(Boolean, default=False, index=True)
+    query = Column(String, default="")                 # the crawl query that found it
+    posted_at = Column(String, default="")             # provider-reported recency text
+    first_seen = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+    last_seen = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+    __table_args__ = (
+        Index("ix_crawled_country_type", "country", "employment_type"),
+    )

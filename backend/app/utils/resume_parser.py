@@ -35,7 +35,40 @@ SKILL_KEYWORDS = [
     "rest api", "graphql", "microservices", "agile", "scrum",
     "communication", "leadership", "project management", "selenium", "playwright",
     "figma", "ui/ux", "product management", "spark", "hadoop", "kafka",
+    # --- Embedded / hardware / electronics ---
+    "embedded c", "embedded systems", "embedded software", "embedded linux",
+    "firmware", "rtos", "freertos", "zephyr", "mbed",
+    "arm", "arm cortex", "cortex-m", "stm32", "esp32", "microcontroller", "mcu",
+    "i2c", "spi", "uart", "can bus", "modbus", "jtag", "swd",
+    "verilog", "vhdl", "fpga", "asic", "soc", "dsp",
+    "pcb", "altium", "kicad", "eagle", "schematic", "device driver",
+    "bare metal", "bootloader", "yocto", "buildroot",
+    "arduino", "raspberry pi", "beaglebone", "nordic", "nrf",
+    "matlab", "simulink", "autosar", "misra", "lin",
+    "signal processing", "analog", "digital design", "iot", "ota",
+    "assembly", "keil", "iar", "gdb", "oscilloscope", "logic analyzer",
 ]
+
+
+def skills_in_text(text: str) -> list:
+    """Return the known skills mentioned in `text`, in canonical Title-case.
+
+    Plain alphanumeric skills use a word-boundary match (so "go" doesn't match
+    "goal"). Skills containing special chars (c++, c#, ci/cd, node.js) fall back
+    to a substring match, because \\b never matches next to '+', '#' or '/'.
+    Shared by the resume parser AND job endpoints so both sides detect skills the
+    same way (fair match/gap analysis).
+    """
+    low = text.lower()
+    out = []
+    for kw in SKILL_KEYWORDS:
+        if re.fullmatch(r"[a-z0-9 .]+", kw):
+            hit = re.search(r"\b" + re.escape(kw) + r"\b", low) is not None
+        else:
+            hit = kw in low
+        if hit:
+            out.append(kw.title())
+    return list(dict.fromkeys(out))
 
 DEGREE_KEYWORDS = [
     "bachelor", "master", "ph.d", "phd", "b.tech", "btech", "b.e", "m.tech",
@@ -227,11 +260,7 @@ def parse_resume(file_path: str) -> dict:
     if exp_matches:
         experience = max(exp_matches)
 
-    skills = []
-    for kw in SKILL_KEYWORDS:
-        if re.search(r"\b" + re.escape(kw) + r"\b", lowered):
-            skills.append(kw.title())
-    skills = list(dict.fromkeys(skills))
+    skills = skills_in_text(text)
 
     linkedin_m = LINKEDIN_RE.search(text)
     linkedin = linkedin_m.group(0) if linkedin_m else ""

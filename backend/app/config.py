@@ -221,6 +221,31 @@ class Settings:
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
     AI_MODEL: str = os.getenv("AI_MODEL", "claude-opus-4-8")
 
+    # ----- Free LLM providers (no-credit-card tiers) -----
+    # generate_text() tries providers in this order: Anthropic → Groq → Gemini →
+    # OpenRouter → Cerebras → heuristic fallback. Set any subset of keys; the
+    # first configured provider that returns text wins. All are OpenAI-compatible
+    # except Gemini (its own REST endpoint).
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")            # https://console.groq.com (free, no card)
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")        # https://aistudio.google.com/apikey (free, no card)
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")  # https://openrouter.ai (free models, no card)
+    OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+    CEREBRAS_API_KEY: str = os.getenv("CEREBRAS_API_KEY", "")    # https://cloud.cerebras.ai (free, no card)
+    CEREBRAS_MODEL: str = os.getenv("CEREBRAS_MODEL", "llama-3.3-70b")
+
+    # ----- Crawl-and-store engine (in-app async loop) -----
+    # When enabled, a background task repeatedly queries the free providers across
+    # a (query × country) matrix and upserts unique jobs into crawled_jobs, so the
+    # pool grows to 10k+ over time. Search shows only the top few hundred by match.
+    CRAWLER_ENABLED: bool = os.getenv("CRAWLER_ENABLED", "0") == "1"
+    CRAWLER_INTERVAL_MIN: int = int(os.getenv("CRAWLER_INTERVAL_MIN", "30"))
+    CRAWLER_PER_QUERY_LIMIT: int = int(os.getenv("CRAWLER_PER_QUERY_LIMIT", "100"))
+    CRAWLER_PACING_SEC: float = float(os.getenv("CRAWLER_PACING_SEC", "1.5"))
+    CRAWLER_QUERIES: str = os.getenv("CRAWLER_QUERIES", "")      # comma-separated; blank = built-in defaults
+    CRAWLER_COUNTRIES: str = os.getenv("CRAWLER_COUNTRIES", "")  # comma-separated codes; blank = all supported
+
     # Logging / monitoring
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     APP_VERSION: str = os.getenv("APP_VERSION", "beta")

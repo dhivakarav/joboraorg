@@ -863,6 +863,30 @@ class _ExtJobIn(_BaseModel):
     skills: List[str] = []
 
 
+def _skill_gap(job: "_ExtJobIn", profile: dict) -> tuple[list, list, list]:
+    """Compute (job_required, matching, missing) skills.
+
+    - job_required = skills the JOB asks for = skills detected in its title +
+      description PLUS any skill pills the extension scraped (job.skills).
+    - matching = job-required skills the candidate HAS.
+    - missing  = job-required skills the candidate LACKS (the honest "gaps"
+      to show as 'Missing from your resume' — NOT resume skills absent from the
+      job, which is what this used to return).
+    """
+    from ..utils.resume_parser import skills_in_text
+    resume_have = {s.lower() for s in profile.get("skills", [])}
+    job_required = skills_in_text(f"{job.title} {job.description_snippet}")
+    have_lower = {j.lower() for j in job_required}
+    for s in (job.skills or []):
+        s = (s or "").strip()
+        if s and s.lower() not in have_lower:
+            job_required.append(s)
+            have_lower.add(s.lower())
+    matching = [s for s in job_required if s.lower() in resume_have]
+    missing = [s for s in job_required if s.lower() not in resume_have]
+    return job_required, matching, missing
+
+
 @router.post("/score")
 def score_extension_job(
     job: _ExtJobIn,
@@ -888,10 +912,8 @@ def score_extension_job(
     match = score_job(job_dict, profile)
     elig = eligibility(job_dict, profile)
 
-    # Missing skills = resume skills not mentioned in title or description.
-    resume_skills = profile.get("skills", [])
-    job_text = f"{job.title} {job.description_snippet}".lower()
-    missing = [s for s in resume_skills if s.lower() not in job_text]
+    # Missing skills = skills the JOB requires that the candidate LACKS.
+    _, _, missing = _skill_gap(job, profile)
 
     # Check if already tracked.
     import hashlib
@@ -913,6 +935,53 @@ def score_extension_job(
     }
 
 
+# ── Crawl-and-store pool (10k+ engine) ────────────────────────────────────────
+
+@router.get("/pool-stats")
+def crawled_pool_stats(user: User = Depends(get_approved_user), db: Session = Depends(get_db)):
+    """Size of the crawled pool, with a breakdown by country + source."""
+    from ..jobs.store import pool_stats
+    return pool_stats(db)
+
+
+@router.get("/stored")
+def stored_jobs(
+    q: str = Query(""),
+    country: str = Query("", description="country bucket: in/us/ca/gb/de/sg/ae/remote"),
+    employment_type: str = Query(""),
+    remote: bool = Query(False),
+    company: str = Query(""),
+    limit: int = Query(200, ge=1, le=500, description="max jobs SHOWN (rest stay stored/hidden)"),
+    user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Read the crawled pool, score every candidate against the user's resume, and
+    return only the top `limit` by match score. The full pool stays stored — this
+    is the 'show a few hundred, keep the rest hidden' surface.
+    """
+    from ..jobs.store import query_stored, count_stored
+    profile = _load_profile(db, user, materialize=False)
+    candidates = query_stored(
+        db, country=country, employment_type=employment_type,
+        remote=(True if remote else None), company=company, text=q,
+        limit=max(limit * 5, 1000),   # score a wide pool, then cut to the shown slice
+    )
+    scored = []
+    for j in candidates:
+        m = score_job(j, profile)
+        j2 = dict(j)
+        j2["match_score"] = m["score"]
+        j2["match_reasons"] = m.get("reasons", [])
+        scored.append(j2)
+    scored.sort(key=lambda x: x["match_score"], reverse=True)
+    return {
+        "total_pool": count_stored(db),
+        "candidates_scored": len(scored),
+        "returned": min(limit, len(scored)),
+        "jobs": scored[:limit],
+    }
+
+
 @router.post("/ai-tips")
 def ai_resume_tips(
     job: _ExtJobIn,
@@ -926,9 +995,8 @@ def ai_resume_tips(
     from ..models import Resume as _Resume
 
     profile = _load_profile(db, user, materialize=False)
-    resume_skills = profile.get("skills", [])
-    job_text = f"{job.title} {job.description_snippet}".lower()
-    missing = [s for s in resume_skills if s.lower() not in job_text]
+    # Gaps the candidate should close = job-required skills they lack.
+    _, _, missing = _skill_gap(job, profile)
 
     if available():
         res_row = db.query(_Resume).filter_by(user_id=user.id).first()
@@ -1036,10 +1104,8 @@ def ai_match_summary(
                          "location": job.location, "employment_type": job.employment_type},
                         profile)
 
-    resume_skills = profile.get("skills", [])
-    job_text = f"{job.title} {job.description_snippet}".lower()
-    matching = [s for s in resume_skills if s.lower() in job_text]
-    missing  = [s for s in resume_skills if s.lower() not in job_text]
+    # matching = job-required skills you have; missing = job-required gaps.
+    _, matching, missing = _skill_gap(job, profile)
 
     if available():
         res_row = db.query(_Resume).filter_by(user_id=user.id).first()
