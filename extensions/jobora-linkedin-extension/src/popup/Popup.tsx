@@ -10,6 +10,15 @@ import { sendMsg } from '../api/messages';
 import type { JoBoraUser, ResumeProfile } from '../types/job';
 import Spinner from '../sidebar/components/Spinner';
 
+// Default API base shown in "Server settings". Baked in at build time
+// (build.mjs vite `define`) — production by default, or the JOBORA_API_BASE
+// override for local dev builds. Keeps a fresh install off localhost for
+// real users while letting local builds point at http://localhost:8000/api.
+const DEFAULT_BASE =
+  typeof __JOBORA_API_BASE__ !== 'undefined'
+    ? __JOBORA_API_BASE__
+    : 'https://jobara-api.onrender.com/api';
+
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated';
 
 export default function Popup() {
@@ -27,7 +36,7 @@ export default function Popup() {
 
   useEffect(() => {
     chrome.storage.local.get(['jobora_api_base'], ({ jobora_api_base }) => {
-      setApiBase((jobora_api_base as string | undefined) ?? 'http://localhost:8000/api');
+      setApiBase((jobora_api_base as string | undefined) ?? DEFAULT_BASE);
     });
 
     sendMsg<JoBoraUser>({ type: 'GET_ME' }).then(res => {
@@ -192,7 +201,7 @@ export default function Popup() {
               className="jbr-input text-xs"
               value={apiBase}
               onChange={e => setApiBase(e.target.value)}
-              placeholder="http://localhost:8000/api"
+              placeholder={DEFAULT_BASE}
             />
             <button onClick={saveApiBase} className="jbr-btn-ghost text-xs w-full">
               {apiBaseSaved ? '✓ Saved' : 'Save'}

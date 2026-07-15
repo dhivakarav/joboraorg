@@ -12,7 +12,15 @@ import react from '@vitejs/plugin-react';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const alias = { '@': resolve(__dirname, 'src') };
-const define = { 'process.env.NODE_ENV': '"production"' };
+
+// API base baked into the bundle. Defaults to production; override for local dev:
+//   JOBORA_API_BASE=http://localhost:8000/api npm run build
+const API_BASE = process.env.JOBORA_API_BASE || 'https://jobara-api.onrender.com/api';
+const define = {
+  'process.env.NODE_ENV': '"production"',
+  __JOBORA_API_BASE__: JSON.stringify(API_BASE),
+};
+console.log(`\n🔧  API base baked into build: ${API_BASE}`);
 
 // ── Pass 1: popup + background ────────────────────────────────────────────────
 await build({

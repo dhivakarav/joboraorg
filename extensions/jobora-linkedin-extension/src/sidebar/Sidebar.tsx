@@ -155,7 +155,17 @@ export default function Sidebar({ hostEl }: SidebarProps) {
         return sendMsg<JobScore>({ type: 'SCORE_JOB', job: extracted }).then(res => {
           if (abort.signal.aborted) return;
           if (res.ok) {
-            setJobState(s => ({ ...s, phase: 'ready', score: res.data }));
+            // Adopt the backend's canonical fingerprint (SHA-256 of
+            // source|company|title|url). The adapter's synchronous fingerprint
+            // is a non-cryptographic approximation that never matches the hash
+            // the backend uses for its `already_saved` lookup — so without this
+            // Track Job would never reflect as saved. Overwrite it here.
+            setJobState(s => ({
+              ...s,
+              phase: 'ready',
+              score: res.data,
+              job: s.job ? { ...s.job, fingerprint: res.data.fingerprint } : s.job,
+            }));
           } else {
             setJobState(s => ({
               ...s,
@@ -192,7 +202,10 @@ export default function Sidebar({ hostEl }: SidebarProps) {
   // ── User actions ─────────────────────────────────────────────────────────────
   async function handleTrackJob() {
     if (!jobState.job) return;
-    await sendMsg({ type: 'SAVE_JOB', job: jobState.job });
+    const saveRes = await sendMsg({ type: 'SAVE_JOB', job: jobState.job });
+    // Surface a failed save to ActionButtons (which catches + shows the error)
+    // instead of silently marking the job as tracked.
+    if (!saveRes.ok) throw new Error(saveRes.error);
     // Refresh score so already_saved updates
     const res = await sendMsg<JobScore>({ type: 'SCORE_JOB', job: jobState.job });
     if (res.ok) setJobState(s => ({ ...s, score: res.data }));
@@ -265,17 +278,7 @@ export default function Sidebar({ hostEl }: SidebarProps) {
             </div>
 
             <div className="flex items-center gap-1.5">
-              {/* Debug toggle */}
-              {job && (
-                <button
-                  onClick={() => setShowDebug(d => !d)}
-                  title="Toggle extraction debug view"
-                  className={`jbr-btn-ghost px-1.5 py-0.5 text-[10px] font-mono
-                              ${showDebug ? 'border-brand text-brand' : 'text-ink-soft'}`}
-                >
-                  {}
-                </button>
-              )}
+              {/* Debug toggle lives in the footer — see the "debug" button there. */}
               {user && (
                 <>
                   <span className="text-xs text-ink-soft truncate max-w-[110px]">
@@ -398,9 +401,14 @@ export default function Sidebar({ hostEl }: SidebarProps) {
                   />
                 )}
 
-                {/* Track Job + AI buttons */}
+                {/* Track Job + AI buttons.
+                    Keyed by the stable job URL so the component remounts on
+                    every job change — otherwise its internal `tracked`/tips/
+                    letter state would leak from the previous job (e.g. a new,
+                    unsaved job would still show "✓ Tracked"). */}
                 {job && phase !== 'idle' && phase !== 'extract_failed' && (
                   <ActionButtons
+                    key={job.url}
                     alreadySaved={score?.already_saved ?? false}
                     onTrackJob={handleTrackJob}
                     onGenerateTips={handleGenerateTips}

@@ -12,7 +12,12 @@ import type { StoredAuth } from '../types/job';
 
 // Production backend. Can be overridden via chrome.storage.local `jobora_api_base`
 // (the "Server settings" section in the popup) for local dev.
-const DEFAULT_BASE = 'https://jobara-api.onrender.com/api';
+// Baked in at build time (build.mjs vite `define`). Defaults to production;
+// override for local dev with `JOBORA_API_BASE=http://localhost:8000/api npm run build`.
+const DEFAULT_BASE =
+  typeof __JOBORA_API_BASE__ !== 'undefined'
+    ? __JOBORA_API_BASE__
+    : 'https://jobara-api.onrender.com/api';
 
 // ── Storage helpers ────────────────────────────────────────────────────────────
 
