@@ -22,7 +22,7 @@
  *   (c) recover back to the list if a stray full navigation slips through.
  */
 import { sendMsg } from '../api/messages';
-import { getProfile } from './profile';
+import { getProfile, effectiveMinMatch } from './profile';
 import { getBanRisk, DAILY_SAFE } from './banmeter';
 import { LinkedInAdapter } from '../adapters/linkedin';
 import { runApplyLoop, findApplyContainer, sleep, toast } from './index';
@@ -240,7 +240,7 @@ async function runBulkLoop(): Promise<void> {
     if (!job) { await bump('skipped', 'Job details not loaded'); continue; }
     const scoreRes = await sendMsg<{ match_score: number }>({ type: 'SCORE_JOB', job });
     const score = scoreRes.ok ? scoreRes.data.match_score : 0;
-    if (score < profile.autoSubmitMinMatch) {
+    if (score < effectiveMinMatch(profile)) {
       await bump('skipped', `Skipped ${job.title} (${score}%)`);
       continue;
     }

@@ -4,7 +4,7 @@
  * obvious (the old toggle was buried in the autofill settings).
  */
 import { useEffect, useState } from 'react';
-import { getProfile, patchProfile } from '../autofill/profile';
+import { getProfile, patchProfile, BYPASS_PASSWORD } from '../autofill/profile';
 
 export default function AutoApplyToggle() {
   const [on, setOn] = useState(false);
@@ -13,10 +13,17 @@ export default function AutoApplyToggle() {
   const [loc, setLoc] = useState('');
   const [loaded, setLoaded] = useState(false);
 
+  // Password-gated low-match bypass.
+  const [bypass, setBypass] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  const [pwErr, setPwErr] = useState(false);
+
   useEffect(() => {
     getProfile().then(p => {
       setOn(p.autoSubmit); setMinMatch(p.autoSubmitMinMatch);
       setQuery(p.searchQuery || ''); setLoc(p.searchLocation || '');
+      setBypass(p.matchBypass);
       setLoaded(true);
     });
   }, []);
@@ -29,6 +36,18 @@ export default function AutoApplyToggle() {
   async function saveMin(v: number) {
     setMinMatch(v);
     await patchProfile({ autoSubmitMinMatch: v });
+  }
+  async function tryUnlock() {
+    if (pw === BYPASS_PASSWORD) {
+      setBypass(true); setPwOpen(false); setPw(''); setPwErr(false);
+      await patchProfile({ matchBypass: true });
+    } else {
+      setPwErr(true);
+    }
+  }
+  async function relock() {
+    setBypass(false);
+    await patchProfile({ matchBypass: false });
   }
 
   if (!loaded) return null;
@@ -84,6 +103,45 @@ export default function AutoApplyToggle() {
               onChange={e => { setLoc(e.target.value); void patchProfile({ searchLocation: e.target.value }); }}
             />
           </div>
+          {/* ── Low-match bypass (password-gated) ─────────────────────── */}
+          <div className="border-t border-edge pt-1.5">
+            {bypass ? (
+              <div className="flex items-center justify-between gap-2 rounded bg-err/10 px-2 py-1.5">
+                <span className="text-[11px] font-semibold text-err">🔓 Match filter bypassed — applies to ALL scores</span>
+                <button onClick={relock} className="text-[10px] underline text-ink-soft shrink-0">Lock</button>
+              </div>
+            ) : !pwOpen ? (
+              <button
+                onClick={() => { setPwOpen(true); setPwErr(false); }}
+                className="w-full text-[11px] text-ink-soft underline text-left"
+              >
+                🔒 Bypass match filter (password)…
+              </button>
+            ) : (
+              <div className="space-y-1">
+                <label className="jbr-label">Enter bypass password</label>
+                <div className="flex gap-1">
+                  <input
+                    type="password"
+                    autoFocus
+                    className={`jbr-input text-xs flex-1 ${pwErr ? 'border-err' : ''}`}
+                    value={pw}
+                    onChange={e => { setPw(e.target.value); setPwErr(false); }}
+                    onKeyDown={e => { if (e.key === 'Enter') void tryUnlock(); }}
+                    placeholder="••••••••"
+                  />
+                  <button onClick={() => void tryUnlock()} className="jbr-btn-primary text-xs px-2">Unlock</button>
+                </div>
+                {pwErr && <div className="text-[10px] text-err">Wrong password.</div>}
+                <div className="text-[10px] text-warn leading-snug">
+                  Bypass applies to LOW-match jobs too — more applications, more
+                  ban risk, lower relevance. It never fabricates answers; it still
+                  pauses on questions it can't answer truthfully.
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="text-[10px] text-err leading-snug">
             ⚠ Auto-submitting sends real applications and can get your account
             restricted. Throttled by the daily ban meter. Use carefully.

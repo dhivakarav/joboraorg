@@ -11,7 +11,7 @@
  */
 import { sendMsg } from '../api/messages';
 import type { JoBoraUser, ResumeProfile } from '../types/job';
-import { getProfile, patchProfile, type AutofillProfile } from './profile';
+import { getProfile, patchProfile, effectiveMinMatch, type AutofillProfile } from './profile';
 import { runAutofill } from './engine';
 import { recordApply, getBanRisk } from './banmeter';
 import { setNativeValue, isVisible, labelTextFor } from './fill';
@@ -171,10 +171,12 @@ async function autoApply(container: HTMLElement): Promise<void> {
   const job = new LinkedInAdapter().extract();
   if (job) {
     const s = await sendMsg<{ match_score: number }>({ type: 'SCORE_JOB', job });
-    if (s.ok && s.data.match_score < profile.autoSubmitMinMatch) {
-      toast(`Auto-apply skipped — ${s.data.match_score}% is below your ${profile.autoSubmitMinMatch}% threshold.`);
+    const floor = effectiveMinMatch(profile);
+    if (s.ok && s.data.match_score < floor) {
+      toast(`Auto-apply skipped — ${s.data.match_score}% is below your ${floor}% threshold.`);
       return;
     }
+    if (profile.matchBypass && s.ok) toast(`🔓 Bypass on — applying despite ${s.data.match_score}% match.`);
   }
 
   toast('▶ Auto-applying…');

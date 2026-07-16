@@ -43,12 +43,28 @@ export interface AutofillProfile {
   autoSubmit: boolean;
   autoSubmitMinMatch: number;
 
+  /** Password-gated override: when true, auto-apply ignores the match-score
+   *  filter and applies to low-match jobs too. Unlocked via BYPASS_PASSWORD. */
+  matchBypass: boolean;
+
   /** Saved search the bulk "Start auto-apply" engine runs on LinkedIn. */
   searchQuery: string;
   searchLocation: string;
 }
 
 const KEY = 'jobora_autofill_profile';
+
+/**
+ * Soft gate for the match-filter bypass. NOTE: this lives in the client bundle,
+ * so it is NOT real security — it's a deliberate "are you sure" speed-bump so
+ * the low-match override can't be flipped on by accident.
+ */
+export const BYPASS_PASSWORD = 'Jobora@321$';
+
+/** The score threshold to actually enforce — 0 when the bypass is unlocked. */
+export function effectiveMinMatch(p: AutofillProfile): number {
+  return p.matchBypass ? 0 : p.autoSubmitMinMatch;
+}
 
 export const EMPTY_PROFILE: AutofillProfile = {
   firstName: '', lastName: '', email: '', phone: '',
@@ -61,6 +77,7 @@ export const EMPTY_PROFILE: AutofillProfile = {
   defaultYesNo: 'Yes',
   autoSubmit: false,
   autoSubmitMinMatch: 55,
+  matchBypass: false,
   searchQuery: '',
   searchLocation: '',
 };

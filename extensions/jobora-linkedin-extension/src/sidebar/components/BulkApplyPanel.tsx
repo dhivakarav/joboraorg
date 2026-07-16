@@ -10,14 +10,18 @@ export default function BulkApplyPanel() {
   const [state, setState] = useState<BulkState | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [query, setQuery] = useState('');
+  const [bypass, setBypass] = useState(false);
 
   useEffect(() => {
     const load = () => getBulkState().then(setState);
     load();
-    getProfile().then(p => { setEnabled(p.autoSubmit); setQuery(p.searchQuery || ''); });
+    const loadProfile = () => getProfile().then(p => {
+      setEnabled(p.autoSubmit); setQuery(p.searchQuery || ''); setBypass(p.matchBypass);
+    });
+    loadProfile();
     const onChange = (c: Record<string, chrome.storage.StorageChange>) => {
       if (c.jobora_bulk_run) load();
-      if (c.jobora_autofill_profile) getProfile().then(p => { setEnabled(p.autoSubmit); setQuery(p.searchQuery || ''); });
+      if (c.jobora_autofill_profile) loadProfile();
     };
     chrome.storage.onChanged.addListener(onChange);
     return () => chrome.storage.onChanged.removeListener(onChange);
@@ -31,6 +35,7 @@ export default function BulkApplyPanel() {
         <span className="text-xs font-semibold text-ink-soft uppercase tracking-wide">
           Bulk auto-apply
         </span>
+        {bypass && <span className="text-[10px] font-semibold text-err">🔓 bypass</span>}
         {state.active && <span className="text-[10px] text-brand animate-pulse">running…</span>}
       </div>
 
