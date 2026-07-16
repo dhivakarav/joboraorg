@@ -13,6 +13,7 @@ import { sendMsg } from '../api/messages';
 import type { JoBoraUser, ResumeProfile } from '../types/job';
 import { getProfile, patchProfile, type AutofillProfile } from './profile';
 import { runAutofill } from './engine';
+import { recordApply } from './banmeter';
 
 const BTN_ID = 'jobora-autofill-btn';
 const BRAND = '#2563EB';
@@ -89,6 +90,7 @@ export function initAutofill(): void {
   void seedProfileFromAccount();
 
   const observer = new MutationObserver(() => {
+    detectSubmitted();
     const modal = findModal();
     if (!modal) return;
     injectButton(modal);
@@ -97,6 +99,24 @@ export function initAutofill(): void {
     debounce = window.setTimeout(() => void doFill(modal, false), 500);
   });
   observer.observe(document.body, { childList: true, subtree: true });
+}
+
+// ── Ban-risk: count a submit when LinkedIn confirms the application was sent ──
+let lastSentAt = 0;
+function detectSubmitted(): void {
+  // Bounded scan: only headings / feedback elements, not the whole page.
+  const els = document.querySelectorAll('h2, h3, [class*="post-apply"] *, [class*="feedback"]');
+  let sent = false;
+  for (const el of els) {
+    if (/application was sent|your application was submitted/i.test(el.textContent || '')) {
+      sent = true; break;
+    }
+  }
+  if (!sent) return;
+  const now = Date.now();
+  if (now - lastSentAt < 5000) return;   // dedupe the burst of mutations
+  lastSentAt = now;
+  void recordApply().then(r => toast(`✅ Applied · ${r.message}`));
 }
 
 /**

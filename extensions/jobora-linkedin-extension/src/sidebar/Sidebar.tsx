@@ -24,6 +24,7 @@ import AiSummary from './components/AiSummary';
 import DebugView from './components/DebugView';
 import ExtractionStatus from './components/ExtractionStatus';
 import Spinner from './components/Spinner';
+import BanMeter from './components/BanMeter';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -422,6 +423,9 @@ export default function Sidebar({ hostEl }: SidebarProps) {
                     Scoring failed — you can still track this job manually.
                   </div>
                 )}
+
+                {/* Ban-risk meter — applications submitted today */}
+                <BanMeter />
 
                 {/* Resume status pill */}
                 {resume !== null && (
