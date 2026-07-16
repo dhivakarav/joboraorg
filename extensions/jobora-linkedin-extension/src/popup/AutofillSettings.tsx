@@ -91,6 +91,30 @@ export default function AutofillSettings() {
           </select>
         </div>
 
+        {/* Auto-apply (opt-in, risky) */}
+        <div className="border-t border-edge pt-2 mt-1.5 space-y-1.5">
+          {toggle('▶ Auto-submit high matches', 'autoSubmit')}
+          {p.autoSubmit && (
+            <>
+              <div className="flex items-center gap-2">
+                <label className="jbr-label flex-1">Only auto-submit if match ≥</label>
+                <input
+                  className="jbr-input text-xs w-16"
+                  type="number"
+                  value={String(p.autoSubmitMinMatch)}
+                  onChange={e => set('autoSubmitMinMatch', Number(e.target.value) as AutofillProfile['autoSubmitMinMatch'])}
+                />
+                <span className="text-xs text-ink-soft">%</span>
+              </div>
+              <div className="rounded-btn bg-err/10 border border-err/20 px-2 py-1.5 text-[10px] text-err leading-snug">
+                ⚠ Auto-submitting sends real applications and can get your LinkedIn
+                account restricted. The button turns red and only submits jobs above
+                your threshold, while the daily ban meter throttles it. Use carefully.
+              </div>
+            </>
+          )}
+        </div>
+
         <button onClick={save} className="jbr-btn-ghost text-xs w-full">
           {saved ? '✓ Saved' : 'Save autofill profile'}
         </button>

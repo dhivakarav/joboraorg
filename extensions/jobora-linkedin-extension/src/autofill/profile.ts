@@ -37,6 +37,11 @@ export interface AutofillProfile {
 
   /** Fallback for unrecognised Yes/No questions. */
   defaultYesNo: 'Yes' | 'No';
+
+  /** Auto-apply: when on, the ⚡ button fills AND submits — but only for jobs
+   *  scoring >= autoSubmitMinMatch and while under the daily ban limit. */
+  autoSubmit: boolean;
+  autoSubmitMinMatch: number;
 }
 
 const KEY = 'jobora_autofill_profile';
@@ -50,6 +55,8 @@ export const EMPTY_PROFILE: AutofillProfile = {
   workAuthorized: true, requiresSponsorship: false,
   skills: [],
   defaultYesNo: 'Yes',
+  autoSubmit: false,
+  autoSubmitMinMatch: 55,
 };
 
 export async function getProfile(): Promise<AutofillProfile> {

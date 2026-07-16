@@ -13,7 +13,7 @@ import { sendMsg } from '../api/messages';
 import type { JoBoraUser, ResumeProfile } from '../types/job';
 import { getProfile, patchProfile, type AutofillProfile } from './profile';
 import { runAutofill } from './engine';
-import { recordApply } from './banmeter';
+import { recordApply, getBanRisk } from './banmeter';
 import { setNativeValue, isVisible, labelTextFor } from './fill';
 import { LinkedInAdapter } from '../adapters/linkedin';
 
@@ -126,8 +126,78 @@ async function fillCoverLetters(modal: HTMLElement): Promise<void> {
   toast(`✍️ Cover letter filled${res.data.ai ? ' (AI)' : ''} — review before submitting.`);
 }
 
+// ── #4 Hybrid auto-apply (opt-in, gated by ban meter + match score) ───────────
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+function findBtn(container: HTMLElement, re: RegExp): HTMLButtonElement | null {
+  for (const b of Array.from(container.querySelectorAll<HTMLButtonElement>('button'))) {
+    if (b.disabled || !isVisible(b)) continue;
+    const label = `${b.textContent ?? ''} ${b.getAttribute('aria-label') ?? ''}`.trim();
+    if (re.test(label)) return b;
+  }
+  return null;
+}
+
+/** True if a visible required field is still empty — never auto-submit then. */
+function hasUnfilledRequired(container: HTMLElement): boolean {
+  const req = container.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+    '[required], [aria-required="true"]',
+  );
+  for (const el of req) {
+    if (!isVisible(el) || el.disabled) continue;
+    if (el instanceof HTMLSelectElement) {
+      if (!el.value || /^(select|choose|--)/i.test(el.options[el.selectedIndex]?.text ?? '')) return true;
+    } else if (el.type === 'radio' || el.type === 'checkbox') {
+      const name = el.getAttribute('name');
+      if (name && !container.querySelector(`input[name="${CSS.escape(name)}"]:checked`)) return true;
+    } else if (!el.value.trim()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Fill → advance → submit, but ONLY when: the daily ban budget isn't exhausted,
+ * the job scores >= the user's threshold, and every required field got filled.
+ * Bails safely (never submits a half-empty form) and hands back to the user.
+ */
+async function autoApply(container: HTMLElement): Promise<void> {
+  const profile = await getProfile();
+  const risk = await getBanRisk();
+  if (risk.level === 'high') { toast(`⛔ ${risk.message}`); return; }
+
+  // Match gate (LinkedIn only — that's where we can score the current job).
+  const job = new LinkedInAdapter().extract();
+  if (job) {
+    const s = await sendMsg<{ match_score: number }>({ type: 'SCORE_JOB', job });
+    if (s.ok && s.data.match_score < profile.autoSubmitMinMatch) {
+      toast(`Auto-apply skipped — ${s.data.match_score}% is below your ${profile.autoSubmitMinMatch}% threshold.`);
+      return;
+    }
+  }
+
+  toast('▶ Auto-applying…');
+  for (let step = 0; step < 8; step++) {
+    runAutofill(container, profile);
+    await fillCoverLetters(container);
+    await sleep(700);
+
+    const submit = findBtn(container, /submit application/i);
+    if (submit) { submit.click(); return; }   // ban meter increments via detectSubmitted
+    if (hasUnfilledRequired(container)) { toast('⏸ Auto-apply paused — a field needs your answer.'); return; }
+
+    const next = findBtn(container, /continue to next|^next$|review your application|^review$/i);
+    if (!next) { toast('⏸ Auto-apply stopped — no Next/Submit found.'); return; }
+    next.click();
+    await sleep(900);
+  }
+  toast('⏸ Auto-apply stopped after 8 steps — please finish manually.');
+}
+
 // Single persistent, fixed-position button (works for modal AND page forms).
 let btnEl: HTMLButtonElement | null = null;
+let autoSubmitOn = false;   // cached from the profile; controls button mode + label
 
 function ensureButton(container: HTMLElement | null): void {
   if (!container) { if (btnEl) btnEl.style.display = 'none'; return; }
@@ -135,21 +205,28 @@ function ensureButton(container: HTMLElement | null): void {
     btnEl = document.createElement('button');
     btnEl.id = BTN_ID;
     btnEl.type = 'button';
-    btnEl.textContent = '⚡ Autofill (Jobora)';
     Object.assign(btnEl.style, {
       position: 'fixed', bottom: '20px', right: '20px', zIndex: '2147483646',
-      background: BRAND, color: '#fff', border: 'none', borderRadius: '22px',
+      color: '#fff', border: 'none', borderRadius: '22px',
       padding: '10px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
       fontFamily: 'system-ui, sans-serif', boxShadow: '0 4px 14px rgba(37,99,235,0.4)',
     });
     document.body.appendChild(btnEl);
   }
+  paintButton();
   btnEl.style.display = 'block';
   btnEl.onclick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    void doFill(container, true);
+    if (autoSubmitOn) void autoApply(container);
+    else void doFill(container, true);
   };
+}
+
+function paintButton(): void {
+  if (!btnEl) return;
+  btnEl.textContent = autoSubmitOn ? '▶ Auto-apply & submit' : '⚡ Autofill (Jobora)';
+  btnEl.style.background = autoSubmitOn ? '#DC2626' : BRAND;   // red = it will submit
 }
 
 let debounce: number | undefined;
@@ -157,6 +234,12 @@ let debounce: number | undefined;
 /** Start watching for application forms (LinkedIn modal or any board) to autofill. */
 export function initAutofill(): void {
   void seedProfileFromAccount();
+  void getProfile().then(p => { autoSubmitOn = p.autoSubmit; paintButton(); });
+  chrome.storage.onChanged.addListener((c) => {
+    if (c.jobora_autofill_profile) {
+      void getProfile().then(p => { autoSubmitOn = p.autoSubmit; paintButton(); });
+    }
+  });
 
   const observer = new MutationObserver(() => {
     detectSubmitted();
