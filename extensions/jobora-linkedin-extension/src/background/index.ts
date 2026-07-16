@@ -98,6 +98,12 @@ chrome.runtime.onMessage.addListener(
             break;
           }
 
+          case 'GET_APPLICATIONS': {
+            const apps = await api.get('/applications?page_size=25');
+            sendResponse(ok(apps));
+            break;
+          }
+
           case 'SAVE_JOB': {
             // Re-use the existing POST /api/jobs/apply endpoint — no new API needed.
             const payload = {

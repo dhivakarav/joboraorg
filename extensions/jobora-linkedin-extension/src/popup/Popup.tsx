@@ -10,6 +10,7 @@ import { sendMsg } from '../api/messages';
 import type { JoBoraUser, ResumeProfile } from '../types/job';
 import Spinner from '../sidebar/components/Spinner';
 import AutofillSettings from './AutofillSettings';
+import ApplicationsTracker from './ApplicationsTracker';
 
 // Default API base shown in "Server settings". Baked in at build time
 // (build.mjs vite `define`) — production by default, or the JOBORA_API_BASE
@@ -189,6 +190,9 @@ export default function Popup() {
             </form>
           </>
         )}
+
+        {/* ── Applications tracker ── */}
+        {authState === 'authenticated' && <ApplicationsTracker />}
 
         {/* ── Autofill profile ── */}
         {authState === 'authenticated' && <AutofillSettings />}

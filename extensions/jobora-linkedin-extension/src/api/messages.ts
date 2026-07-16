@@ -20,7 +20,8 @@ export type ExtRequest =
   | { type: 'SAVE_JOB'; job: ExtractedJob }
   | { type: 'AI_TIPS'; job: ExtractedJob }
   | { type: 'AI_SUMMARY'; job: ExtractedJob }
-  | { type: 'COVER_LETTER'; job: ExtractedJob };
+  | { type: 'COVER_LETTER'; job: ExtractedJob }
+  | { type: 'GET_APPLICATIONS' };
 
 // ── Response types ─────────────────────────────────────────────────────────────
 

@@ -84,3 +84,23 @@ export interface SavedApplication {
   display_status: string;
   apply_url: string;
 }
+
+/** One row in the application tracker (GET /api/applications). */
+export interface TrackedApplication {
+  id: number;
+  job_title: string;
+  company: string;
+  location: string;
+  match_score: number;
+  display_status: string;
+  apply_url: string;
+  applied_at?: string;
+}
+
+/** Paginated response from GET /api/applications. */
+export interface ApplicationsPage {
+  items: TrackedApplication[];
+  total: number;
+  page: number;
+  page_size: number;
+}
