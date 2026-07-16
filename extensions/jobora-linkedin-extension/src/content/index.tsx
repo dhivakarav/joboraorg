@@ -58,16 +58,20 @@ function mount(): void {
 }
 
 // ── Initial mount ──────────────────────────────────────────────────────────────
-// LinkedIn sometimes renders content script after the body is ready; wait for it.
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', mount);
-} else {
-  mount();
+// The match-score sidebar is LinkedIn-specific (LinkedInAdapter). Only mount it
+// on LinkedIn; on other job boards we run autofill only.
+const IS_LINKEDIN = location.hostname.endsWith('linkedin.com');
+if (IS_LINKEDIN) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount);
+  } else {
+    mount();
+  }
 }
 
 // ── Autofill ─────────────────────────────────────────────────────────────────
-// Watches for the LinkedIn Easy Apply modal and fills application fields from
-// the user's profile. Fills only — the user reviews and submits.
+// Runs on every supported board (LinkedIn modal + generic forms on Naukri /
+// Indeed / Internshala). Fills only — the user reviews and submits.
 initAutofill();
 
 // ── SPA navigation ─────────────────────────────────────────────────────────────

@@ -39,6 +39,33 @@ function findModal(): HTMLElement | null {
   return null;
 }
 
+/**
+ * On non-LinkedIn boards (Naukri, Indeed, Internshala, generic ATS) the
+ * application isn't a modal — it's a form on the page. Return the most
+ * application-like <form>: several inputs AND a contact field (email/phone).
+ */
+function findGenericForm(): HTMLElement | null {
+  for (const f of Array.from(document.querySelectorAll<HTMLElement>('form'))) {
+    if (!isVisible(f)) continue;
+    const inputs = f.querySelectorAll(
+      'input[type="text"],input[type="email"],input[type="tel"],input:not([type]),textarea,select',
+    );
+    const contact = f.querySelector(
+      'input[type="email"],input[type="tel"],input[name*="email" i],input[name*="phone" i],input[name*="mobile" i]',
+    );
+    if (inputs.length >= 3 && contact) return f;
+  }
+  return null;
+}
+
+/** The container to autofill: LinkedIn modal, or a generic form elsewhere. */
+function findApplyContainer(): HTMLElement | null {
+  const modal = findModal();
+  if (modal) return modal;
+  if (!location.hostname.endsWith('linkedin.com')) return findGenericForm();
+  return null;
+}
+
 function toast(msg: string): void {
   const t = document.createElement('div');
   t.textContent = msg;
@@ -99,42 +126,46 @@ async function fillCoverLetters(modal: HTMLElement): Promise<void> {
   toast(`✍️ Cover letter filled${res.data.ai ? ' (AI)' : ''} — review before submitting.`);
 }
 
-function injectButton(modal: HTMLElement): void {
-  if (modal.querySelector(`#${BTN_ID}`)) return;
-  const btn = document.createElement('button');
-  btn.id = BTN_ID;
-  btn.type = 'button';
-  btn.textContent = '⚡ Autofill (Jobora)';
-  Object.assign(btn.style, {
-    position: 'absolute', top: '14px', right: '56px', zIndex: '10',
-    background: BRAND, color: '#fff', border: 'none', borderRadius: '20px',
-    padding: '6px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-    fontFamily: 'system-ui, sans-serif', boxShadow: '0 2px 8px rgba(37,99,235,0.35)',
-  });
-  btn.addEventListener('click', (e) => {
+// Single persistent, fixed-position button (works for modal AND page forms).
+let btnEl: HTMLButtonElement | null = null;
+
+function ensureButton(container: HTMLElement | null): void {
+  if (!container) { if (btnEl) btnEl.style.display = 'none'; return; }
+  if (!btnEl) {
+    btnEl = document.createElement('button');
+    btnEl.id = BTN_ID;
+    btnEl.type = 'button';
+    btnEl.textContent = '⚡ Autofill (Jobora)';
+    Object.assign(btnEl.style, {
+      position: 'fixed', bottom: '20px', right: '20px', zIndex: '2147483646',
+      background: BRAND, color: '#fff', border: 'none', borderRadius: '22px',
+      padding: '10px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+      fontFamily: 'system-ui, sans-serif', boxShadow: '0 4px 14px rgba(37,99,235,0.4)',
+    });
+    document.body.appendChild(btnEl);
+  }
+  btnEl.style.display = 'block';
+  btnEl.onclick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    void doFill(modal, true);
-  });
-  // The modal is position:relative in LinkedIn; ensure our absolute button anchors to it.
-  if (getComputedStyle(modal).position === 'static') modal.style.position = 'relative';
-  modal.appendChild(btn);
+    void doFill(container, true);
+  };
 }
 
 let debounce: number | undefined;
 
-/** Start watching for Easy Apply modals and autofill them. */
+/** Start watching for application forms (LinkedIn modal or any board) to autofill. */
 export function initAutofill(): void {
   void seedProfileFromAccount();
 
   const observer = new MutationObserver(() => {
     detectSubmitted();
-    const modal = findModal();
-    if (!modal) return;
-    injectButton(modal);
+    const container = findApplyContainer();
+    ensureButton(container);
+    if (!container) return;
     // Debounced auto-fill as steps reveal new fields (idempotent: skips filled ones).
     window.clearTimeout(debounce);
-    debounce = window.setTimeout(() => void doFill(modal, false), 500);
+    debounce = window.setTimeout(() => void doFill(container, false), 500);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 }
