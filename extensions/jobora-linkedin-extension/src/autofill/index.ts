@@ -59,14 +59,14 @@ function findGenericForm(): HTMLElement | null {
 }
 
 /** The container to autofill: LinkedIn modal, or a generic form elsewhere. */
-function findApplyContainer(): HTMLElement | null {
+export function findApplyContainer(): HTMLElement | null {
   const modal = findModal();
   if (modal) return modal;
   if (!location.hostname.endsWith('linkedin.com')) return findGenericForm();
   return null;
 }
 
-function toast(msg: string): void {
+export function toast(msg: string): void {
   const t = document.createElement('div');
   t.textContent = msg;
   Object.assign(t.style, {
@@ -127,7 +127,7 @@ async function fillCoverLetters(modal: HTMLElement): Promise<void> {
 }
 
 // ── #4 Hybrid auto-apply (opt-in, gated by ban meter + match score) ───────────
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 function findBtn(container: HTMLElement, re: RegExp): HTMLButtonElement | null {
   for (const b of Array.from(container.querySelectorAll<HTMLButtonElement>('button'))) {
@@ -178,21 +178,35 @@ async function autoApply(container: HTMLElement): Promise<void> {
   }
 
   toast('▶ Auto-applying…');
+  const status = await runApplyLoop(container);
+  if (status === 'paused') toast('⏸ Auto-apply paused — a field needs your answer.');
+  else if (status === 'stopped') toast('⏸ Auto-apply stopped — please finish manually.');
+}
+
+export type ApplyStatus = 'submitted' | 'paused' | 'stopped';
+
+/**
+ * Fill → advance → submit within an already-open apply form. Returns:
+ *   submitted — clicked "Submit application"
+ *   paused    — a required field it can't answer truthfully is empty
+ *   stopped   — no Next/Submit found, or ran out of steps
+ * Reused by the single-job button AND the bulk engine.
+ */
+export async function runApplyLoop(container: HTMLElement): Promise<ApplyStatus> {
+  const profile = await getProfile();
   for (let step = 0; step < 8; step++) {
     runAutofill(container, profile);
     await fillCoverLetters(container);
     await sleep(700);
-
     const submit = findBtn(container, /submit application/i);
-    if (submit) { submit.click(); return; }   // ban meter increments via detectSubmitted
-    if (hasUnfilledRequired(container)) { toast('⏸ Auto-apply paused — a field needs your answer.'); return; }
-
+    if (submit) { submit.click(); return 'submitted'; }   // ban meter counts via detectSubmitted
+    if (hasUnfilledRequired(container)) return 'paused';
     const next = findBtn(container, /continue to next|^next$|review your application|^review$/i);
-    if (!next) { toast('⏸ Auto-apply stopped — no Next/Submit found.'); return; }
+    if (!next) return 'stopped';
     next.click();
     await sleep(900);
   }
-  toast('⏸ Auto-apply stopped after 8 steps — please finish manually.');
+  return 'stopped';
 }
 
 // Single persistent, fixed-position button (works for modal AND page forms).

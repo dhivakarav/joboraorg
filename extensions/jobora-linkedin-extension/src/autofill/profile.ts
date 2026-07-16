@@ -42,6 +42,10 @@ export interface AutofillProfile {
    *  scoring >= autoSubmitMinMatch and while under the daily ban limit. */
   autoSubmit: boolean;
   autoSubmitMinMatch: number;
+
+  /** Saved search the bulk "Start auto-apply" engine runs on LinkedIn. */
+  searchQuery: string;
+  searchLocation: string;
 }
 
 const KEY = 'jobora_autofill_profile';
@@ -57,6 +61,8 @@ export const EMPTY_PROFILE: AutofillProfile = {
   defaultYesNo: 'Yes',
   autoSubmit: false,
   autoSubmitMinMatch: 55,
+  searchQuery: '',
+  searchLocation: '',
 };
 
 export async function getProfile(): Promise<AutofillProfile> {

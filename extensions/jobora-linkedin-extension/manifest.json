@@ -6,7 +6,8 @@
   "minimum_chrome_version": "111",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",

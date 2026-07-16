@@ -9,10 +9,16 @@ import { getProfile, patchProfile } from '../autofill/profile';
 export default function AutoApplyToggle() {
   const [on, setOn] = useState(false);
   const [minMatch, setMinMatch] = useState(55);
+  const [query, setQuery] = useState('');
+  const [loc, setLoc] = useState('');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    getProfile().then(p => { setOn(p.autoSubmit); setMinMatch(p.autoSubmitMinMatch); setLoaded(true); });
+    getProfile().then(p => {
+      setOn(p.autoSubmit); setMinMatch(p.autoSubmitMinMatch);
+      setQuery(p.searchQuery || ''); setLoc(p.searchLocation || '');
+      setLoaded(true);
+    });
   }, []);
 
   async function toggle() {
@@ -62,6 +68,21 @@ export default function AutoApplyToggle() {
               onChange={e => saveMin(Number(e.target.value))}
             />
             <span className="text-[11px] text-ink-soft">%</span>
+          </div>
+          <div className="border-t border-edge pt-1.5 space-y-1.5">
+            <label className="jbr-label">Saved search — for “Start auto-apply”</label>
+            <input
+              className="jbr-input text-xs"
+              placeholder="Role, e.g. Machine Learning Engineer"
+              value={query}
+              onChange={e => { setQuery(e.target.value); void patchProfile({ searchQuery: e.target.value }); }}
+            />
+            <input
+              className="jbr-input text-xs"
+              placeholder="Location, e.g. India (optional)"
+              value={loc}
+              onChange={e => { setLoc(e.target.value); void patchProfile({ searchLocation: e.target.value }); }}
+            />
           </div>
           <div className="text-[10px] text-err leading-snug">
             ⚠ Auto-submitting sends real applications and can get your account

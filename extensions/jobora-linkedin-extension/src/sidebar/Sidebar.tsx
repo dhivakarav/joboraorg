@@ -25,6 +25,7 @@ import DebugView from './components/DebugView';
 import ExtractionStatus from './components/ExtractionStatus';
 import Spinner from './components/Spinner';
 import BanMeter from './components/BanMeter';
+import BulkApplyPanel from './components/BulkApplyPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -423,6 +424,9 @@ export default function Sidebar({ hostEl }: SidebarProps) {
                     Scoring failed — you can still track this job manually.
                   </div>
                 )}
+
+                {/* Bulk auto-apply engine */}
+                <BulkApplyPanel />
 
                 {/* Ban-risk meter — applications submitted today */}
                 <BanMeter />

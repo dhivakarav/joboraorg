@@ -15,6 +15,7 @@ import Sidebar from '../sidebar/Sidebar';
 import sidebarCss from '../sidebar/sidebar.css?inline';
 import { watchNavigation } from './detector';
 import { initAutofill } from '../autofill';
+import { resumeBulkIfActive } from '../autofill/bulk';
 
 const HOST_ID = 'jobora-ext-host';
 
@@ -73,6 +74,10 @@ if (IS_LINKEDIN) {
 // Runs on every supported board (LinkedIn modal + generic forms on Naukri /
 // Indeed / Internshala). Fills only — the user reviews and submits.
 initAutofill();
+
+// If a bulk auto-apply run was in progress (e.g. before navigating to the saved
+// search), resume it after the page loads.
+if (IS_LINKEDIN) void resumeBulkIfActive();
 
 // ── SPA navigation ─────────────────────────────────────────────────────────────
 watchNavigation((url) => {

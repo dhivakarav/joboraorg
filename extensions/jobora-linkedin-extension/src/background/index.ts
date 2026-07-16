@@ -104,6 +104,19 @@ chrome.runtime.onMessage.addListener(
             break;
           }
 
+          case 'SHOW_NOTIFICATION': {
+            // Inline 1×1 icon so notifications work without shipping an icon asset.
+            const ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+            chrome.notifications.create({
+              type: 'basic',
+              iconUrl: ICON,
+              title: msg.title,
+              message: msg.message,
+            }, () => void chrome.runtime.lastError);
+            sendResponse(ok({}));
+            break;
+          }
+
           case 'SAVE_JOB': {
             // Re-use the existing POST /api/jobs/apply endpoint — no new API needed.
             const payload = {

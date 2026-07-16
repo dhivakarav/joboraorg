@@ -21,7 +21,8 @@ export type ExtRequest =
   | { type: 'AI_TIPS'; job: ExtractedJob }
   | { type: 'AI_SUMMARY'; job: ExtractedJob }
   | { type: 'COVER_LETTER'; job: ExtractedJob }
-  | { type: 'GET_APPLICATIONS' };
+  | { type: 'GET_APPLICATIONS' }
+  | { type: 'SHOW_NOTIFICATION'; title: string; message: string };
 
 // ── Response types ─────────────────────────────────────────────────────────────
 
