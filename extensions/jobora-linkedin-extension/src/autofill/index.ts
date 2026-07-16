@@ -241,14 +241,23 @@ export function initAutofill(): void {
     }
   });
 
+  // Throttle: LinkedIn's Easy Apply modal fires a storm of mutations. Coalesce
+  // them into ONE run per animation frame so the heavy DOM scans below never
+  // freeze the tab (this was a perf regression).
+  let scheduled = false;
   const observer = new MutationObserver(() => {
-    detectSubmitted();
-    const container = findApplyContainer();
-    ensureButton(container);
-    if (!container) return;
-    // Debounced auto-fill as steps reveal new fields (idempotent: skips filled ones).
-    window.clearTimeout(debounce);
-    debounce = window.setTimeout(() => void doFill(container, false), 500);
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      detectSubmitted();
+      const container = findApplyContainer();
+      ensureButton(container);
+      if (!container) return;
+      // Debounced auto-fill as steps reveal new fields (idempotent: skips filled).
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(() => void doFill(container, false), 500);
+    });
   });
   observer.observe(document.body, { childList: true, subtree: true });
 }
@@ -256,8 +265,9 @@ export function initAutofill(): void {
 // ── Ban-risk: count a submit when LinkedIn confirms the application was sent ──
 let lastSentAt = 0;
 function detectSubmitted(): void {
-  // Bounded scan: only headings / feedback elements, not the whole page.
-  const els = document.querySelectorAll('h2, h3, [class*="post-apply"] *, [class*="feedback"]');
+  // Cheap, bounded scan: the confirmation is an <h2> ("Your application was
+  // sent to X!"). Avoid expensive descendant selectors like `[class*=post-apply] *`.
+  const els = document.querySelectorAll('h2, h3');
   let sent = false;
   for (const el of els) {
     if (/application was sent|your application was submitted/i.test(el.textContent || '')) {
