@@ -108,6 +108,28 @@ function alreadyApplied(card: HTMLElement): boolean {
   return /\bapplied\b/i.test(card.textContent || '');
 }
 
+/**
+ * The JOB's "Easy Apply" button in the detail pane — NOT the "Easy Apply"
+ * filter pill in the search toolbar (which comes first in DOM order and would
+ * just toggle a filter). Prefer the stable apply-button class; fall back to a
+ * text match that explicitly excludes filter/toolbar controls.
+ */
+function findJobEasyApplyBtn(): HTMLButtonElement | null {
+  const byClass = document.querySelector<HTMLButtonElement>(
+    '.jobs-apply-button--top-card button, .jobs-apply-button button, ' +
+    'button.jobs-apply-button, button[class*="jobs-apply-button"]',
+  );
+  if (byClass && !byClass.disabled &&
+      /easy apply/i.test((byClass.textContent || '') + ' ' + (byClass.getAttribute('aria-label') || ''))) {
+    return byClass;
+  }
+  return Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b =>
+    !b.disabled &&
+    /easy apply/i.test((b.textContent || '') + ' ' + (b.getAttribute('aria-label') || '')) &&
+    !b.closest('.search-reusables__filters-bar, [class*="search-reusables"], [class*="filter"], header, nav'),
+  ) || null;
+}
+
 /** Poll until `pred` is true or `ms` elapses. Returns the final truthiness. */
 async function waitFor(pred: () => boolean, ms = 8000, step = 250): Promise<boolean> {
   const end = Date.now() + ms;
@@ -245,13 +267,13 @@ async function runBulkLoop(): Promise<void> {
       continue;
     }
 
-    // Open Easy Apply (scoped to the detail pane's apply button).
-    const easyBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
-      .find(b => /easy apply/i.test(b.textContent || '') && !b.disabled);
+    // Open Easy Apply — the JOB's apply button, NOT the search-filter pill.
+    const easyBtn = findJobEasyApplyBtn();
     if (!easyBtn) { await bump('skipped', `No Easy Apply for ${job.title}`); continue; }
     easyBtn.click();
-    await sleep(1500);
 
+    // Poll for the modal to open (it can take a couple seconds).
+    await waitFor(() => !!findApplyContainer(), 7000);
     const container = findApplyContainer();
     if (!container) { await bump('skipped', `Couldn't open form for ${job.title}`); continue; }
 
