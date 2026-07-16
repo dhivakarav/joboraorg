@@ -40,6 +40,11 @@ export interface JobScore {
   eligibility_tier: string;
   eligible: boolean;
   eligibility_reason: string;
+  /** Honest combined verdict (skill fit + eligibility). */
+  recommendation?: 'apply' | 'consider' | 'skip';
+  verdict?: string;
+  why_not?: string[];
+  should_apply?: boolean;
   already_saved: boolean;
 }
 

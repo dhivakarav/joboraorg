@@ -863,6 +863,54 @@ class _ExtJobIn(_BaseModel):
     skills: List[str] = []
 
 
+def _honest_verdict(match_score: int, elig: dict, missing: list) -> dict:
+    """Combine skill match + eligibility into ONE honest recommendation.
+
+    The old response showed eligibility_tier (60=Good) even when skill match was
+    22% — dishonest. Here the tier is driven by ACTUAL skill fit and hard-capped
+    by eligibility disqualifiers, with ruthless 'why not' reasons. This is the
+    product's differentiator: telling users which jobs to SKIP.
+    """
+    why_not: list = []
+
+    # Hard disqualifiers (senior role for early-career, PhD/visa, etc.) cap it.
+    if not elig.get("eligible", True):
+        for r in elig.get("eligibility_reasons", [])[:3]:
+            why_not.append(r)
+        return {
+            "tier": "Not Recommended", "recommendation": "skip",
+            "verdict": "Skip — you don't meet the hard requirements.",
+            "why_not": why_not or [elig.get("eligibility_reason", "Not a fit")],
+            "should_apply": False,
+        }
+
+    s = match_score
+    if s >= 75:
+        tier, rec, verdict = "Strong Match", "apply", "Strong fit — apply."
+    elif s >= 55:
+        tier, rec, verdict = "Good Match", "apply", "Good fit — worth applying."
+    elif s >= 40:
+        tier, rec, verdict = "Fair Match", "consider", "Borderline — apply only if you can tailor your resume."
+    elif s >= 25:
+        tier, rec, verdict = "Weak Match", "skip", "Weak fit — likely a waste of time."
+    else:
+        tier, rec, verdict = "Poor Match", "skip", "Poor fit — skip this one."
+
+    if s < 55 and missing:
+        why_not.append(f"Missing key skills: {', '.join(missing[:5])}")
+    if s < 40:
+        why_not.append(f"Only {s}% skill overlap with this role")
+    for r in elig.get("eligibility_reasons", []):
+        # surface soft flags (visa etc.) even when eligible
+        if any(w in r.lower() for w in ("visa", "authorization", "year")):
+            why_not.append(r)
+
+    return {
+        "tier": tier, "recommendation": rec, "verdict": verdict,
+        "why_not": why_not, "should_apply": rec == "apply",
+    }
+
+
 def _skill_gap(job: "_ExtJobIn", profile: dict) -> tuple[list, list, list]:
     """Compute (job_required, matching, missing) skills.
 
@@ -922,15 +970,25 @@ def score_extension_job(
     already_saved = db.query(Application.id).filter_by(
         user_id=user.id, job_url_hash=fingerprint).first() is not None
 
+    verdict = _honest_verdict(match["score"], elig, missing)
+
     return {
         "fingerprint": fingerprint,
         "match_score": match["score"],
         "match_reasons": match["reasons"],
         "missing_skills": missing[:12],
         "eligibility_score": elig["eligibility_score"],
-        "eligibility_tier": elig["eligibility_tier"],
+        # eligibility_tier now carries the HONEST combined verdict (skill fit +
+        # eligibility), not the old seniority-only tier — so 22% never reads
+        # "Good Match". Legacy field name kept for the extension MatchPanel.
+        "eligibility_tier": verdict["tier"],
         "eligible": elig["eligible"],
         "eligibility_reason": elig["eligibility_reason"],
+        # New honest fields — the differentiator.
+        "recommendation": verdict["recommendation"],   # apply | consider | skip
+        "verdict": verdict["verdict"],                 # one honest sentence
+        "why_not": verdict["why_not"],                 # ruthless skip reasons
+        "should_apply": verdict["should_apply"],
         "already_saved": already_saved,
     }
 
