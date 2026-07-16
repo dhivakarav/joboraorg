@@ -14,7 +14,7 @@ Jobora is a **discovery + assisted-apply** platform, not a credential bot:
 - It pulls real openings from **official provider APIs** (Greenhouse, Lever,
   Remotive, Arbeitnow; plus Adzuna/Jooble when keys are set).
 - Every job carries a real `apply_url` and a **Verified** badge once its source
-  is validated.
+  is validated. 
 - Clicking **Apply** opens the genuine application page and records the
   application in the user's tracker.
 - **Auto-Discover** fetches all real jobs matching the user's filters and saves
