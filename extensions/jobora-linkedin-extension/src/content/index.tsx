@@ -14,6 +14,7 @@ import ReactDOM from 'react-dom/client';
 import Sidebar from '../sidebar/Sidebar';
 import sidebarCss from '../sidebar/sidebar.css?inline';
 import { watchNavigation } from './detector';
+import { initAutofill } from '../autofill';
 
 const HOST_ID = 'jobora-ext-host';
 
@@ -63,6 +64,11 @@ if (document.readyState === 'loading') {
 } else {
   mount();
 }
+
+// ── Autofill ─────────────────────────────────────────────────────────────────
+// Watches for the LinkedIn Easy Apply modal and fills application fields from
+// the user's profile. Fills only — the user reviews and submits.
+initAutofill();
 
 // ── SPA navigation ─────────────────────────────────────────────────────────────
 watchNavigation((url) => {

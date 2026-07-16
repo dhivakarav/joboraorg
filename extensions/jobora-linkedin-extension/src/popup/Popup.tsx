@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { sendMsg } from '../api/messages';
 import type { JoBoraUser, ResumeProfile } from '../types/job';
 import Spinner from '../sidebar/components/Spinner';
+import AutofillSettings from './AutofillSettings';
 
 // Default API base shown in "Server settings". Baked in at build time
 // (build.mjs vite `define`) — production by default, or the JOBORA_API_BASE
@@ -188,6 +189,9 @@ export default function Popup() {
             </form>
           </>
         )}
+
+        {/* ── Autofill profile ── */}
+        {authState === 'authenticated' && <AutofillSettings />}
 
         {/* ── API base URL (dev setting) ── */}
         <details className="text-xs">
