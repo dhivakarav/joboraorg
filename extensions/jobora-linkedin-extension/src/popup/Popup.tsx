@@ -11,6 +11,7 @@ import type { JoBoraUser, ResumeProfile } from '../types/job';
 import Spinner from '../sidebar/components/Spinner';
 import AutofillSettings from './AutofillSettings';
 import ApplicationsTracker from './ApplicationsTracker';
+import AutoApplyToggle from './AutoApplyToggle';
 
 // Default API base shown in "Server settings". Baked in at build time
 // (build.mjs vite `define`) — production by default, or the JOBORA_API_BASE
@@ -129,6 +130,9 @@ export default function Popup() {
                 <Spinner size="sm" />
               )}
             </div>
+
+            {/* Prominent Auto-apply switch */}
+            <AutoApplyToggle />
 
             <div className="flex gap-2">
               <a
