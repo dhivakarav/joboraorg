@@ -108,5 +108,28 @@ export function labelTextFor(el: Element): string {
 }
 
 function clean(s: string): string {
-  return s.replace(/\s+/g, ' ').replace(/\*/g, '').trim();
+  return dedupeRepeat(s.replace(/\s+/g, ' ').replace(/\*/g, '').trim());
+}
+
+/**
+ * Collapse an immediately-repeated label. LinkedIn often renders a visible
+ * label plus a screen-reader copy of the same text, so `textContent` yields
+ * "CityCity" or "City City". Return the single unit when the string is exactly
+ * its first half repeated.
+ */
+function dedupeRepeat(s: string): string {
+  if (!s) return s;
+  // "CityCity" — no separator.
+  for (let n = 1; n <= s.length / 2; n++) {
+    if (s.length % n === 0 && s.slice(0, n).repeat(s.length / n) === s) return s.slice(0, n);
+  }
+  // "City City" — word-repeated.
+  const words = s.split(' ');
+  if (words.length % 2 === 0) {
+    const half = words.length / 2;
+    if (words.slice(0, half).join(' ') === words.slice(half).join(' ')) {
+      return words.slice(0, half).join(' ');
+    }
+  }
+  return s;
 }

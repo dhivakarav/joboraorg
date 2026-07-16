@@ -116,6 +116,7 @@ async function seedProfileFromAccount(): Promise<void> {
       if (!current.lastName && rest.length) patch.lastName = rest.join(' ');
       if (!current.email && me.data.email) patch.email = me.data.email;
       if (!current.phone && me.data.phone) patch.phone = me.data.phone;
+      if (!current.currentTitle && me.data.job_title) patch.currentTitle = me.data.job_title;
       if ((!current.yearsExperience || current.yearsExperience === '1') && me.data.years_experience)
         patch.yearsExperience = String(me.data.years_experience);
     }

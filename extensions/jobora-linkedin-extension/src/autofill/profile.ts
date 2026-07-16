@@ -18,6 +18,10 @@ export interface AutofillProfile {
   postalCode: string;
   linkedinUrl: string;
 
+  // Current/most-recent employment (for "Work experience" steps)
+  currentTitle: string;
+  currentCompany: string;
+
   // Common screening answers
   yearsExperience: string;        // e.g. "1"
   expectedCtc: string;            // e.g. "6" (LPA) — kept as string for text fields
@@ -40,6 +44,7 @@ const KEY = 'jobora_autofill_profile';
 export const EMPTY_PROFILE: AutofillProfile = {
   firstName: '', lastName: '', email: '', phone: '',
   city: '', country: '', postalCode: '', linkedinUrl: '',
+  currentTitle: '', currentCompany: '',
   yearsExperience: '1', expectedCtc: '', noticePeriodDays: '0',
   availableImmediately: true, hasBachelors: true, willingToRelocate: true,
   workAuthorized: true, requiresSponsorship: false,

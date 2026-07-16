@@ -24,6 +24,14 @@ const has = (label: string, ...needles: string[]) => {
 
 /** Text/number value for a labelled text field, or null to skip. */
 function textValueFor(label: string, p: AutofillProfile): string | null {
+  const l = label.toLowerCase().trim();
+  // Work-experience entry fields — tight match so screening questions that merely
+  // contain "company"/"title" (e.g. "Which company…") don't get clobbered.
+  if (/^(your |current |most recent |job )?title$/.test(l) || l === 'position' || l === 'headline')
+    return p.currentTitle || null;
+  if (l === 'company' || l === 'company name' || l === 'current company' || l === 'employer' || l === 'organization' || l === 'organisation')
+    return p.currentCompany || null;
+
   if (has(label, 'email')) return p.email || null;
   if (has(label, 'mobile', 'phone', 'contact number')) return p.phone || null;
   if (has(label, 'first name')) return p.firstName || null;

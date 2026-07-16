@@ -66,6 +66,10 @@ export default function AutofillSettings() {
           {text('Notice (days)', 'noticePeriodDays', '0')}
         </div>
         {text('LinkedIn URL', 'linkedinUrl', 'https://linkedin.com/in/…')}
+        <div className="grid grid-cols-2 gap-2">
+          {text('Current title', 'currentTitle', 'ML Engineer')}
+          {text('Current company', 'currentCompany', 'Upsky Media')}
+        </div>
 
         <div className="border-t border-edge pt-1.5 mt-1.5">
           {toggle('Available immediately', 'availableImmediately')}
