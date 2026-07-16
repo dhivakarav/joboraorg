@@ -74,8 +74,16 @@ export async function setProfile(p: AutofillProfile): Promise<void> {
   await chrome.storage.local.set({ [KEY]: p });
 }
 
+// Serialize writes so rapid patches (e.g. the popup saving several fields at
+// once) don't read a stale copy and clobber each other. Each patch is queued
+// behind the previous one and re-reads storage after it settles.
+let writeQueue: Promise<AutofillProfile> = getProfile();
+
 export async function patchProfile(patch: Partial<AutofillProfile>): Promise<AutofillProfile> {
-  const merged = { ...(await getProfile()), ...patch };
-  await setProfile(merged);
-  return merged;
+  writeQueue = writeQueue.then(async () => {
+    const merged = { ...(await getProfile()), ...patch };
+    await setProfile(merged);
+    return merged;
+  });
+  return writeQueue;
 }
