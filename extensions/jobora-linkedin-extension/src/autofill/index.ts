@@ -14,6 +14,8 @@ import type { JoBoraUser, ResumeProfile } from '../types/job';
 import { getProfile, patchProfile, type AutofillProfile } from './profile';
 import { runAutofill } from './engine';
 import { recordApply } from './banmeter';
+import { setNativeValue, isVisible, labelTextFor } from './fill';
+import { LinkedInAdapter } from '../adapters/linkedin';
 
 const BTN_ID = 'jobora-autofill-btn';
 const BRAND = '#2563EB';
@@ -58,7 +60,43 @@ async function doFill(modal: HTMLElement, announce: boolean): Promise<void> {
       + (skipped.length ? ` · ${skipped.length} need your review` : ''));
     else if (skipped.length) toast('Nothing to fill here — please answer the remaining fields.');
     else toast('No fillable fields found on this step.');
+    // AI cover letter only on explicit click (costs an API call).
+    void fillCoverLetters(modal);
   }
+}
+
+/**
+ * Fill long "cover letter / why you / message" textareas with a tailored letter
+ * from the backend (Groq via /jobs/cover-letter). Only runs on an explicit
+ * Autofill click, only on clearly cover-letter-ish empty fields, and requires
+ * the user to be signed in.
+ */
+const COVER_RE = /cover letter|why (should|would|do you)|why are you|motivat|message to|tell us|additional information|anything else|about yourself|note to/i;
+
+function isCoverLetterField(ta: HTMLTextAreaElement): boolean {
+  const label = labelTextFor(ta).toLowerCase();
+  if (COVER_RE.test(label)) return true;
+  // Big free-text box with no specific label → likely a cover letter.
+  const maxlen = Number(ta.getAttribute('maxlength') || '0');
+  return maxlen >= 300 || ta.rows >= 4;
+}
+
+async function fillCoverLetters(modal: HTMLElement): Promise<void> {
+  const targets = Array.from(modal.querySelectorAll<HTMLTextAreaElement>('textarea'))
+    .filter(ta => isVisible(ta) && !ta.disabled && !ta.readOnly && !ta.value.trim() && isCoverLetterField(ta));
+  if (!targets.length) return;
+
+  const job = new LinkedInAdapter().extract();
+  if (!job) return;
+
+  toast('✍️ Generating a tailored cover letter…');
+  const res = await sendMsg<{ cover_letter: string; ai: boolean }>({ type: 'COVER_LETTER', job });
+  if (!res.ok || !res.data.cover_letter) {
+    toast('Cover letter unavailable — sign in to Jobora to enable it.');
+    return;
+  }
+  for (const ta of targets) setNativeValue(ta, res.data.cover_letter);
+  toast(`✍️ Cover letter filled${res.data.ai ? ' (AI)' : ''} — review before submitting.`);
 }
 
 function injectButton(modal: HTMLElement): void {
