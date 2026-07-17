@@ -863,6 +863,16 @@ class _ExtJobIn(_BaseModel):
     skills: List[str] = []
 
 
+class _FieldAnswerIn(_BaseModel):
+    """A single application-form question the extension needs answered."""
+    label: str
+    field_type: str = "text"          # "text" | "choice" | "number"
+    options: List[str] = []           # for choice fields (radio/select)
+    job_title: str = ""
+    job_company: str = ""
+    max_len: int = 300
+
+
 def _honest_verdict(match_score: int, elig: dict, missing: list) -> dict:
     """Combine skill match + eligibility into ONE honest recommendation.
 
@@ -1138,6 +1148,74 @@ def generate_cover_letter(
         f"Thank you for considering my application.\n\nSincerely,\n{name}"
     )
     return {"cover_letter": letter, "ai": False}
+
+
+@router.post("/answer-field")
+def answer_application_field(
+    q: _FieldAnswerIn,
+    user: User = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Answer ONE application-form question, grounded in the user's resume.
+
+    Used by the extension's auto-apply engine to fill free-text / non-standard
+    questions instead of pausing. The model is instructed to stay truthful to
+    the resume and NOT invent qualifications. Returns {"answer": str, "ai": bool}.
+    Returns an empty answer when it cannot answer honestly — the extension then
+    pauses for the user rather than guessing.
+    """
+    from ..ai.client import available, generate_text
+    from ..models import Resume as _Resume
+
+    if not available():
+        return {"answer": "", "ai": False}
+
+    res_row = db.query(_Resume).filter_by(user_id=user.id).first()
+    resume_text = ""
+    if res_row and res_row.raw_text:
+        from ..security import decrypt_value
+        try:
+            resume_text = decrypt_value(res_row.raw_text) if res_row.raw_text else ""
+        except Exception:
+            resume_text = res_row.raw_text or ""
+
+    if q.field_type == "choice" and q.options:
+        opts = "\n".join(f"  - {o}" for o in q.options[:12])
+        task = (
+            f"You are filling a job application for {q.job_title or 'a role'} at "
+            f"{q.job_company or 'a company'}.\n"
+            f"Question: {q.label}\n"
+            f"Choose EXACTLY ONE of these options (reply with only the option text):\n{opts}\n\n"
+            "Base the choice on the candidate's real resume. For eligibility/consent "
+            "questions answer honestly and favourably where true (e.g. authorized to "
+            "work, willing to relocate). Never claim a qualification the resume does "
+            "not support. Reply with only the chosen option, nothing else."
+        )
+        ans = generate_text(task, resume_text=resume_text, max_tokens=40) or ""
+        ans = ans.strip().strip('"').splitlines()[0].strip() if ans else ""
+        # Snap the model's answer to the closest real option.
+        match = next((o for o in q.options if o.strip().lower() == ans.lower()), None)
+        if not match:
+            match = next((o for o in q.options if ans and ans.lower() in o.lower()), None)
+        return {"answer": match or "", "ai": bool(match)}
+
+    # Free-text / number.
+    limit = "a single number only" if q.field_type == "number" else f"at most {q.max_len} characters"
+    task = (
+        f"You are the candidate, filling a job application for "
+        f"{q.job_title or 'a role'} at {q.job_company or 'a company'}.\n"
+        f"Question: {q.label}\n\n"
+        f"Answer in the first person ({limit}), positive and professional, using "
+        "ONLY facts from the candidate's resume below. State what the candidate "
+        "HAS (skills, projects, education) — do NOT mention gaps, what is missing, "
+        "or that experience is limited. Do NOT invent employers, degrees, job "
+        "titles, years, or skills not in the resume. If the resume gives nothing "
+        "relevant to answer, reply with the single word: SKIP."
+    )
+    ans = (generate_text(task, resume_text=resume_text, max_tokens=220) or "").strip()
+    if not ans or ans.strip().upper().rstrip(".") == "SKIP":
+        return {"answer": "", "ai": False}
+    return {"answer": ans, "ai": True}
 
 
 @router.post("/ai-summary")

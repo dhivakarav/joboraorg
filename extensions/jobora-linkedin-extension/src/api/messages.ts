@@ -22,6 +22,7 @@ export type ExtRequest =
   | { type: 'AI_SUMMARY'; job: ExtractedJob }
   | { type: 'COVER_LETTER'; job: ExtractedJob }
   | { type: 'GET_APPLICATIONS' }
+  | { type: 'ANSWER_FIELD'; label: string; fieldType: 'text' | 'choice' | 'number'; options: string[]; jobTitle: string; jobCompany: string }
   | { type: 'SHOW_NOTIFICATION'; title: string; message: string };
 
 // ── Response types ─────────────────────────────────────────────────────────────

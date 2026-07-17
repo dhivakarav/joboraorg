@@ -14,7 +14,7 @@ import type { JoBoraUser, ResumeProfile } from '../types/job';
 import { getProfile, patchProfile, effectiveMinMatch, type AutofillProfile } from './profile';
 import { runAutofill } from './engine';
 import { recordApply, getBanRisk } from './banmeter';
-import { setNativeValue, isVisible, labelTextFor } from './fill';
+import { setNativeValue, isVisible, labelTextFor, selectOption, clickChoice } from './fill';
 import { LinkedInAdapter } from '../adapters/linkedin';
 
 const BTN_ID = 'jobora-autofill-btn';
@@ -185,6 +185,74 @@ async function autoApply(container: HTMLElement): Promise<void> {
   else if (status === 'stopped') toast('⏸ Auto-apply stopped — please finish manually.');
 }
 
+/**
+ * AI pass — for each REQUIRED field the profile couldn't answer, ask the backend
+ * (Groq, grounded in the user's resume) and fill it. Text, number, <select> and
+ * radio groups. Only touches required + empty fields, and only fills when the AI
+ * returns a real answer — if it returns nothing, the field stays empty and the
+ * loop pauses for the user (honesty guard: it never guesses blindly).
+ */
+async function aiFillUnanswered(container: HTMLElement): Promise<void> {
+  const job = new LinkedInAdapter().extract();
+  const jobTitle = job?.title
+    || (document.querySelector('.artdeco-modal h2, [role="dialog"] h2')?.textContent || '')
+      .replace(/^\s*apply to\s*/i, '').trim();
+  const jobCompany = job?.company || '';
+
+  const ask = async (label: string, fieldType: 'text' | 'choice' | 'number', options: string[]) => {
+    const res = await sendMsg<{ answer: string }>({
+      type: 'ANSWER_FIELD', label, fieldType, options, jobTitle, jobCompany,
+    });
+    return res.ok ? (res.data.answer || '') : '';
+  };
+
+  // 1) Required, empty text / number inputs + textareas.
+  const texts = Array.from(container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    'input[type="text"], input[type="number"], input:not([type]), textarea',
+  )).filter(el => isVisible(el) && !el.disabled && !(el as HTMLInputElement).readOnly && !el.value.trim()
+    && (el.required || el.getAttribute('aria-required') === 'true'));
+  for (const el of texts) {
+    const label = labelTextFor(el);
+    if (!label) continue;
+    const fieldType = (el as HTMLInputElement).type === 'number' ? 'number' : 'text';
+    const answer = await ask(label, fieldType, []);
+    if (answer) setNativeValue(el, answer);
+  }
+
+  // 2) Required, unanswered <select> dropdowns.
+  for (const sel of Array.from(container.querySelectorAll<HTMLSelectElement>('select'))) {
+    if (!isVisible(sel) || sel.disabled) continue;
+    const answered = sel.value && !/^(select|choose|--)/i.test(sel.options[sel.selectedIndex]?.text ?? '');
+    if (answered || !(sel.required || sel.getAttribute('aria-required') === 'true')) continue;
+    const label = labelTextFor(sel);
+    if (!label) continue;
+    const options = Array.from(sel.options).map(o => o.text.trim())
+      .filter(t => t && !/^(select|choose|--)/i.test(t));
+    const answer = await ask(label, 'choice', options);
+    if (answer) selectOption(sel, answer);
+  }
+
+  // 3) Unanswered radio groups.
+  const groups = new Set<Element>();
+  container.querySelectorAll<HTMLInputElement>('input[type="radio"]').forEach(r => {
+    const g = r.closest('fieldset') || r.parentElement?.parentElement || r.parentElement;
+    if (g) groups.add(g);
+  });
+  for (const g of groups) {
+    if (g.querySelector('input[type="radio"]:checked')) continue;
+    const first = g.querySelector<HTMLInputElement>('input[type="radio"]');
+    if (!first) continue;
+    const label = labelTextFor(first);
+    if (!label) continue;
+    const options = Array.from(g.querySelectorAll<HTMLInputElement>('input[type="radio"]')).map(r => {
+      const lbl = r.id ? g.querySelector(`label[for="${CSS.escape(r.id)}"]`) : null;
+      return (lbl?.textContent || r.value || '').trim();
+    }).filter(Boolean);
+    const answer = await ask(label, 'choice', options);
+    if (answer) clickChoice(g, answer);
+  }
+}
+
 export type ApplyStatus = 'submitted' | 'paused' | 'stopped';
 
 /**
@@ -199,6 +267,8 @@ export async function runApplyLoop(container: HTMLElement): Promise<ApplyStatus>
   for (let step = 0; step < 8; step++) {
     runAutofill(container, profile);
     await fillCoverLetters(container);
+    // AI pass: answer anything the profile couldn't, grounded in the resume.
+    if (hasUnfilledRequired(container)) await aiFillUnanswered(container);
     await sleep(700);
     const submit = findBtn(container, /submit application/i);
     if (submit) { submit.click(); return 'submitted'; }   // ban meter counts via detectSubmitted

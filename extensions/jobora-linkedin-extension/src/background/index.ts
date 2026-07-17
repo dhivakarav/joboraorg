@@ -104,6 +104,18 @@ chrome.runtime.onMessage.addListener(
             break;
           }
 
+          case 'ANSWER_FIELD': {
+            const answer = await api.post('/jobs/answer-field', {
+              label: msg.label,
+              field_type: msg.fieldType,
+              options: msg.options,
+              job_title: msg.jobTitle,
+              job_company: msg.jobCompany,
+            });
+            sendResponse(ok(answer));
+            break;
+          }
+
           case 'SHOW_NOTIFICATION': {
             // Inline 1×1 icon so notifications work without shipping an icon asset.
             const ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
