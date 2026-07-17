@@ -70,7 +70,7 @@ export const EMPTY_PROFILE: AutofillProfile = {
   firstName: '', lastName: '', email: '', phone: '',
   city: '', country: '', postalCode: '', linkedinUrl: '',
   currentTitle: '', currentCompany: '',
-  yearsExperience: '1', expectedCtc: '', noticePeriodDays: '0',
+  yearsExperience: '2', expectedCtc: '', noticePeriodDays: '0',
   availableImmediately: true, hasBachelors: true, willingToRelocate: true,
   workAuthorized: true, requiresSponsorship: false,
   skills: [],

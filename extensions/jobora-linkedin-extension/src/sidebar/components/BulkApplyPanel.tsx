@@ -13,6 +13,7 @@ export default function BulkApplyPanel() {
   const [enabled, setEnabled] = useState(false);
   const [query, setQuery] = useState('');
   const [bypass, setBypass] = useState(false);
+  const [years, setYears] = useState('2');
 
   // Bypass unlock UI
   const [pwOpen, setPwOpen] = useState(false);
@@ -24,6 +25,7 @@ export default function BulkApplyPanel() {
     load();
     const loadProfile = () => getProfile().then(p => {
       setEnabled(p.autoSubmit); setQuery(p.searchQuery || ''); setBypass(p.matchBypass);
+      setYears(p.yearsExperience || '2');
     });
     loadProfile();
     const onChange = (c: Record<string, chrome.storage.StorageChange>) => {
@@ -106,6 +108,18 @@ export default function BulkApplyPanel() {
           </div>
         </div>
       )}
+
+      {/* Experience default — used to answer "years of experience" questions */}
+      <label className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-ink-soft">Experience to state (yrs)</span>
+        <input
+          type="number"
+          min="0"
+          className="jbr-input text-xs w-16 py-1"
+          value={years}
+          onChange={e => { setYears(e.target.value); void patchProfile({ yearsExperience: e.target.value }); }}
+        />
+      </label>
 
       {/* 3 — Start / Stop */}
       {state.active ? (

@@ -44,9 +44,18 @@ function textValueFor(label: string, p: AutofillProfile): string | null {
   if (has(label, 'notice period')) return p.noticePeriodDays || null;
   if (has(label, 'expected', 'ctc', 'salary', 'compensation', 'expected pay'))
     return p.expectedCtc || null;
-  if (has(label, 'experience') && has(label, 'year'))
-    return p.yearsExperience || null;
-  if (has(label, 'how many years')) return p.yearsExperience || null;
+  // Numeric experience questions — "years of experience with X", "how many
+  // years", "how much experience", "hands-on experience with X". Reuse the ONE
+  // value the user set (never invents a number). Skip prose/essay prompts so we
+  // don't drop a bare number into a "describe/why" textarea — those still pause
+  // for the user.
+  {
+    const isProse = has(label, 'describe', 'explain', 'tell us', 'tell me', 'why ',
+      'cover letter', 'summary', 'about yourself', 'in your own words', 'reason');
+    const isExperienceQ = has(label, 'how many years', 'how long have you', 'how long you')
+      || (has(label, 'experience') && !has(label, 'do you have experience'));
+    if (!isProse && isExperienceQ) return p.yearsExperience || null;
+  }
   return null;
 }
 
