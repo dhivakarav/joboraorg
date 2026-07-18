@@ -59,10 +59,9 @@ function mount(): void {
 }
 
 // ── Initial mount ──────────────────────────────────────────────────────────────
-// The match-score sidebar is LinkedIn-specific (LinkedInAdapter). Only mount it
-// on LinkedIn; on other job boards we run autofill only.
-const IS_LINKEDIN = location.hostname.endsWith('linkedin.com');
-if (IS_LINKEDIN) {
+// Internshala-only build: mount the scoring sidebar on Internshala pages.
+const IS_INTERNSHALA = location.hostname.endsWith('internshala.com');
+if (IS_INTERNSHALA) {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mount);
   } else {
@@ -71,13 +70,10 @@ if (IS_LINKEDIN) {
 }
 
 // ── Autofill ─────────────────────────────────────────────────────────────────
-// Runs on every supported board (LinkedIn modal + generic forms on Naukri /
-// Indeed / Internshala). Fills only — the user reviews and submits.
+// Fills Internshala application forms (cover letter + questions) from the
+// profile + resume-grounded AI. The user reviews and submits.
 initAutofill();
 
-// If a bulk auto-apply run was in progress (e.g. before navigating to the saved
-// search), resume it after the page loads.
-if (IS_LINKEDIN) void resumeBulkIfActive();
 
 // ── SPA navigation ─────────────────────────────────────────────────────────────
 watchNavigation((url) => {

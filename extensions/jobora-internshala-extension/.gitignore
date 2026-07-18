@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.local
+
+# symlinked node_modules (shares the LinkedIn extension deps)
+node_modules

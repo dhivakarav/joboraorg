@@ -11,9 +11,10 @@
  * Opening/closing only resizes the host element — React state is preserved.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LinkedInAdapter, waitForJobReady } from '../adapters/linkedin';
+import { waitForJobReady } from '../adapters/linkedin';
+import { adapterFor } from '../adapters/registry';
 import { sendMsg } from '../api/messages';
-import { watchNavigation, isLinkedInJobPage } from '../content/detector';
+import { watchNavigation } from '../content/detector';
 import type { ExtractedJob, JobScore, JoBoraUser, ResumeProfile } from '../types/job';
 import type { ExtractionPhase } from './components/ExtractionStatus';
 import LoginPrompt from './components/LoginPrompt';
@@ -54,7 +55,9 @@ const INITIAL_JOB_STATE: JobState = {
 const OPEN_WIDTH  = '400px';
 const CLOSED_WIDTH = '0px';
 
-const adapter = new LinkedInAdapter();
+// The bulk auto-apply engine drives the LinkedIn split-view list; it's shown
+// only on LinkedIn. Internshala gets the scoring sidebar + AI cover letter.
+const IS_LINKEDIN_HOST = location.hostname.endsWith('linkedin.com');
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -122,21 +125,25 @@ export default function Sidebar({ hostEl }: SidebarProps) {
     extractionAbort.current = abort;
 
     const url = window.location.href;
+    const adapter = adapterFor(url);
 
-    if (!isLinkedInJobPage(url)) {
+    if (!adapter || !adapter.isJobPage(url)) {
       setJobState({ ...INITIAL_JOB_STATE, phase: 'idle' });
       return;
     }
 
     setJobState(s => ({ ...INITIAL_JOB_STATE, phase: 'waiting', attempt: s.attempt + 1 }));
 
-    // Wait for the job title to appear in the DOM
-    waitForJobReady(12_000)
+    // LinkedIn hydrates its detail pane async — wait for the title. Other boards
+    // (Internshala, Greenhouse…) are server-rendered, so a short settle is enough.
+    const ready = adapter.name === 'LinkedIn'
+      ? waitForJobReady(12_000)
+      : new Promise<void>(r => setTimeout(r, 400));
+
+    ready
       .then(() => {
         if (abort.signal.aborted) return;
         setJobState(s => ({ ...s, phase: 'extracting' }));
-
-        // Small delay to let LinkedIn finish painting the full card
         return new Promise<void>(r => setTimeout(r, 300));
       })
       .then(() => {
@@ -425,8 +432,8 @@ export default function Sidebar({ hostEl }: SidebarProps) {
                   </div>
                 )}
 
-                {/* Bulk auto-apply engine */}
-                <BulkApplyPanel />
+                {/* Bulk auto-apply engine — LinkedIn only */}
+                {IS_LINKEDIN_HOST && <BulkApplyPanel />}
 
                 {/* Ban-risk meter — applications submitted today */}
                 <BanMeter />

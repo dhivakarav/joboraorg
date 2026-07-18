@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Jobora — Job Application Copilot",
-  "version": "1.1.0",
-  "description": "Honest resume-match scoring + bulk auto-apply for LinkedIn (with Naukri & Indeed autofill).",
+  "name": "Jobora — Internshala Copilot",
+  "version": "1.0.0",
+  "description": "Honest resume-match scoring, AI cover letters + application autofill for Internshala internships & jobs.",
   "minimum_chrome_version": "111",
   "permissions": [
     "storage",
@@ -10,14 +10,12 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://www.linkedin.com/*",
-    "https://www.naukri.com/*",
-    "https://*.indeed.com/*",
+    "https://internshala.com/*",
+    "https://*.internshala.com/*",
     "https://jobara-api.onrender.com/*",
     "http://localhost:8000/*",
     "https://*.jobora.app/*",
-    "https://*.jobara.app/*",
-    "https://starconsulting.in/*"
+    "https://*.jobara.app/*"
   ],
   "background": {
     "service_worker": "background/index.js",
@@ -26,9 +24,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.linkedin.com/jobs/*",
-        "https://www.naukri.com/*",
-        "https://*.indeed.com/*"
+        "https://internshala.com/*",
+        "https://*.internshala.com/*"
       ],
       "js": [
         "content/index.js"
@@ -38,12 +35,12 @@
   ],
   "action": {
     "default_popup": "popup/index.html",
-    "default_title": "Jobora"
+    "default_title": "Jobora — Internshala"
   },
   "web_accessible_resources": [
     {
       "resources": ["assets/*"],
-      "matches": ["https://www.linkedin.com/*"]
+      "matches": ["https://internshala.com/*", "https://*.internshala.com/*"]
     }
   ]
 }
