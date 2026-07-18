@@ -79,6 +79,60 @@ export function toast(msg: string): void {
   setTimeout(() => t.remove(), 2600);
 }
 
+// Only one blink alert at a time.
+let blinkActive = false;
+
+/**
+ * Loud attention-grabber for when auto-apply CAN'T proceed on its own and needs
+ * the user. Flashes a full-screen red overlay + the browser-tab title
+ * repeatedly, and shows a sticky banner. Stops as soon as the user clicks or
+ * types anywhere (or after a 60s safety cap).
+ */
+export function alertUser(message: string): void {
+  if (blinkActive) return;
+  blinkActive = true;
+
+  const overlay = document.createElement('div');
+  Object.assign(overlay.style, {
+    position: 'fixed', inset: '0', zIndex: '2147483646', pointerEvents: 'none',
+    background: 'rgba(220,38,38,0.5)', opacity: '0', transition: 'opacity 0.2s',
+  });
+  const banner = document.createElement('div');
+  banner.textContent = `⚠ ${message} — click to continue`;
+  Object.assign(banner.style, {
+    position: 'fixed', top: '0', left: '0', right: '0', zIndex: '2147483647',
+    background: '#DC2626', color: '#fff', padding: '12px', textAlign: 'center',
+    fontSize: '15px', fontWeight: '700', fontFamily: 'system-ui, sans-serif',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.4)', pointerEvents: 'none',
+  });
+  document.body.appendChild(overlay);
+  document.body.appendChild(banner);
+
+  const origTitle = document.title;
+  let on = false;
+  const timer = window.setInterval(() => {
+    on = !on;
+    overlay.style.opacity = on ? '1' : '0';
+    banner.style.opacity = on ? '1' : '0.55';
+    document.title = on ? '🔴 JOBORA NEEDS YOU' : origTitle;
+  }, 500);
+
+  const stop = () => {
+    if (!blinkActive) return;
+    blinkActive = false;
+    window.clearInterval(timer);
+    window.clearTimeout(cap);
+    overlay.remove();
+    banner.remove();
+    document.title = origTitle;
+    window.removeEventListener('mousedown', stop, true);
+    window.removeEventListener('keydown', stop, true);
+  };
+  const cap = window.setTimeout(stop, 60_000);
+  window.addEventListener('mousedown', stop, true);
+  window.addEventListener('keydown', stop, true);
+}
+
 async function doFill(modal: HTMLElement, announce: boolean): Promise<void> {
   const profile = await getProfile();
   const { filled, skipped } = runAutofill(modal, profile);
@@ -181,8 +235,8 @@ async function autoApply(container: HTMLElement): Promise<void> {
 
   toast('▶ Auto-applying…');
   const status = await runApplyLoop(container);
-  if (status === 'paused') toast('⏸ Auto-apply paused — a field needs your answer.');
-  else if (status === 'stopped') toast('⏸ Auto-apply stopped — please finish manually.');
+  if (status === 'paused') alertUser('Auto-apply paused — a field needs your answer');
+  else if (status === 'stopped') alertUser('Auto-apply stopped — please finish this form');
 }
 
 /**

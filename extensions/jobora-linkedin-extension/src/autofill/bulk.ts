@@ -25,7 +25,7 @@ import { sendMsg } from '../api/messages';
 import { getProfile, effectiveMinMatch } from './profile';
 import { getBanRisk, DAILY_SAFE } from './banmeter';
 import { LinkedInAdapter } from '../adapters/linkedin';
-import { runApplyLoop, findApplyContainer, sleep, toast } from './index';
+import { runApplyLoop, findApplyContainer, sleep, toast, alertUser } from './index';
 
 const STATE_KEY = 'jobora_bulk_run';
 
@@ -286,6 +286,7 @@ async function runBulkLoop(): Promise<void> {
     } else if (status === 'paused') {
       await setState({ active: false, current: `Paused — "${job.title}" needs your input.` });
       notify('Jobora — needs your answer', `"${job.title}" has a question I can't answer truthfully. Open LinkedIn to finish it, then restart.`);
+      alertUser(`"${job.title}" needs your answer`);   // blink the screen + tab title
       return;
     } else {
       await bump('skipped', `Couldn't finish ${job.title}`);
