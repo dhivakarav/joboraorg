@@ -59,10 +59,12 @@ function mount(): void {
 }
 
 // ── Initial mount ──────────────────────────────────────────────────────────────
-// The match-score sidebar is LinkedIn-specific (LinkedInAdapter). Only mount it
-// on LinkedIn; on other job boards we run autofill only.
+// The scoring sidebar mounts on boards with a full adapter (LinkedIn, Internshala).
+// Elsewhere (Naukri, Indeed, generic ATS) we run autofill only.
 const IS_LINKEDIN = location.hostname.endsWith('linkedin.com');
-if (IS_LINKEDIN) {
+const SIDEBAR_HOSTS = ['linkedin.com', 'internshala.com'];
+const SHOW_SIDEBAR = SIDEBAR_HOSTS.some(h => location.hostname.endsWith(h));
+if (SHOW_SIDEBAR) {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mount);
   } else {

@@ -8,12 +8,14 @@
  */
 import type { IJobAdapter } from './base';
 import { LinkedInAdapter } from './linkedin';
+import { InternshalaAdapter } from './internshala';
 import { GreenhouseAdapter } from './greenhouse';
 import { LeverAdapter } from './lever';
 import { WorkdayAdapter } from './workday';
 
 const ALL_ADAPTERS: IJobAdapter[] = [
   new LinkedInAdapter(),
+  new InternshalaAdapter(),
   new GreenhouseAdapter(),
   new LeverAdapter(),
   new WorkdayAdapter(),
