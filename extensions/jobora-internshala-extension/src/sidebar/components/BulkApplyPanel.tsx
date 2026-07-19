@@ -11,7 +11,6 @@ import { getProfile, patchProfile, BYPASS_PASSWORD } from '../../autofill/profil
 export default function BulkApplyPanel() {
   const [state, setState] = useState<BulkState | null>(null);
   const [enabled, setEnabled] = useState(false);
-  const [query, setQuery] = useState('');
   const [bypass, setBypass] = useState(false);
   const [years, setYears] = useState('2');
 
@@ -24,7 +23,7 @@ export default function BulkApplyPanel() {
     const load = () => getBulkState().then(setState);
     load();
     const loadProfile = () => getProfile().then(p => {
-      setEnabled(p.autoSubmit); setQuery(p.searchQuery || ''); setBypass(p.matchBypass);
+      setEnabled(p.autoSubmit); setBypass(p.matchBypass);
       setYears(p.yearsExperience || '2');
     });
     loadProfile();

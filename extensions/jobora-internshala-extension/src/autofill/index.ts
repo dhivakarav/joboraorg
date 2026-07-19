@@ -108,14 +108,44 @@ export function alertUser(message: string): void {
   document.body.appendChild(overlay);
   document.body.appendChild(banner);
 
+  // ── Loud repeating beep (Web Audio — no asset needed) ───────────────────────
+  let audioCtx: AudioContext | null = null;
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    audioCtx = new AC();
+    void audioCtx.resume();   // best-effort (may be blocked without a gesture)
+  } catch { audioCtx = null; }
+  const beep = () => {
+    if (!audioCtx) return;
+    try {
+      void audioCtx.resume();
+      const now = audioCtx.currentTime;
+      // Two quick loud tones per pulse.
+      for (const [t, freq] of [[0, 880], [0.18, 1175]] as [number, number][]) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.35, now + t + 0.02);   // loud
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.15);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + 0.16);
+      }
+    } catch { /* ignore */ }
+  };
+
   const origTitle = document.title;
   let on = false;
+  beep();
   const timer = window.setInterval(() => {
     on = !on;
     overlay.style.opacity = on ? '1' : '0';
     banner.style.opacity = on ? '1' : '0.55';
     document.title = on ? '🔴 JOBORA NEEDS YOU' : origTitle;
-  }, 500);
+    if (on) beep();   // beep on each flash
+  }, 600);
 
   const stop = () => {
     if (!blinkActive) return;
@@ -125,6 +155,7 @@ export function alertUser(message: string): void {
     overlay.remove();
     banner.remove();
     document.title = origTitle;
+    try { void audioCtx?.close(); } catch { /* ignore */ }
     window.removeEventListener('mousedown', stop, true);
     window.removeEventListener('keydown', stop, true);
   };

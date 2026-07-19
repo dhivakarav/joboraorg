@@ -16,7 +16,7 @@
  * blank → we DON'T submit; we blink + notify the user and stop.
  */
 import { getProfile, effectiveMinMatch } from './profile';
-import { getBanRisk, DAILY_SAFE } from './banmeter';
+import { getBanRisk, recordApply, DAILY_SAFE } from './banmeter';
 import { InternshalaAdapter } from '../adapters/internshala';
 import { runAutofill } from './engine';
 import { setNativeValue, isVisible, labelTextFor, selectOption, clickChoice } from './fill';
@@ -31,10 +31,11 @@ export interface BulkState {
   skipped: number;
   current: string;
   target: number;
-  queue: string[];   // internship detail URLs still to process
+  queue: string[];       // internship detail URLs still to process
+  pendingApply: boolean; // clicked Submit; confirm on the next page load
 }
 
-const IDLE: BulkState = { active: false, applied: 0, skipped: 0, current: '', target: DAILY_SAFE, queue: [] };
+const IDLE: BulkState = { active: false, applied: 0, skipped: 0, current: '', target: DAILY_SAFE, queue: [], pendingApply: false };
 
 export async function getBulkState(): Promise<BulkState> {
   const { [STATE_KEY]: s } = await chrome.storage.local.get(STATE_KEY);
@@ -63,6 +64,16 @@ const isListing = () => /\/internships(\/|$)/.test(path()) || /\/jobs(\/|$)/.tes
 const isDetail  = () => /\/(internship|job)\/detail\//.test(path());
 const isResumeGate = () => /\/student\/resume/.test(path());
 const isForm    = () => /\/application\/form\//.test(path());
+
+/** Internshala blocks students from full-time jobs with a "not eligible" popup. */
+function isIneligible(): boolean {
+  return /you are not eligible for this job|not eligible to apply|you are ineligible/i.test(document.body.textContent || '');
+}
+function closeAnyPopup(): void {
+  Array.from(document.querySelectorAll<HTMLElement>('button, a, .close, [class*="close"]'))
+    .find(b => /^\s*close\s*$/i.test(b.textContent || '') || /close/i.test(b.getAttribute('class') || ''))
+    ?.click();
+}
 
 /** Detail links currently on a listing page. */
 function listingLinks(): string[] {
@@ -111,9 +122,25 @@ export async function resumeBulkIfActive(): Promise<void> {
   if (!s.active) return;
   await sleep(1200);
 
+  // Confirm a previous Submit: if we left the form page, it went through.
+  // Advance straight to the next queued internship — do NOT route this
+  // (post-apply) page, or a "recommended internships" list could reset the queue.
+  if (s.pendingApply && !isForm()) {
+    await recordApply();                       // count it toward the daily-safe limit
+    await bump('applied', 'Applied ✓');
+    await setState({ pendingApply: false });
+    const risk0 = await getBanRisk();
+    if (risk0.count >= DAILY_SAFE) {
+      await setState({ active: false, current: `Reached ${DAILY_SAFE}/day — stopping.` });
+      notify('Jobora — daily limit reached', `Applied to ${risk0.count} today. Stopping to protect your account.`);
+      return;
+    }
+    return void await gotoNext();
+  }
+
   const risk = await getBanRisk();
   if (risk.count >= DAILY_SAFE) {
-    await setState({ active: false, current: `Reached ${DAILY_SAFE}/day — stopping.` });
+    await setState({ active: false, pendingApply: false, current: `Reached ${DAILY_SAFE}/day — stopping.` });
     notify('Jobora — daily limit reached', `Applied to ${risk.count} today. Stopping to protect your account.`);
     return;
   }
@@ -148,16 +175,19 @@ async function onDetail(): Promise<void> {
     return void await gotoNext();
   }
 
+  // Must be able to READ + SCORE it. Full-time job pages have a different DOM the
+  // internship adapter can't parse → extract() is null → skip (avoids applying to
+  // ineligible full-time jobs like "Executive Assistant to CEO").
   const job = adapter.extract();
-  if (job) {
-    const res = await sendMsg<{ match_score: number }>({ type: 'SCORE_JOB', job });
-    const score = res.ok ? res.data.match_score : 0;
-    if (score < effectiveMinMatch(profile)) {
-      await bump('skipped', `Skipped ${job.title} (${score}%)`);
-      return void await gotoNext();
-    }
-    await setState({ current: `Applying: ${job.title} (${score}%)` });
+  if (!job) { await bump('skipped', 'Couldn\'t read — skipped'); return void await gotoNext(); }
+
+  const res = await sendMsg<{ match_score: number }>({ type: 'SCORE_JOB', job });
+  const score = res.ok ? res.data.match_score : 0;
+  if (score < effectiveMinMatch(profile)) {
+    await bump('skipped', `Skipped ${job.title} (${score}%)`);
+    return void await gotoNext();
   }
+  await setState({ current: `Applying: ${job.title} (${score}%)` });
 
   const apply = document.querySelector<HTMLElement>('.apply_now_button');
   if (!apply) { await bump('skipped', 'No apply button'); return void await gotoNext(); }
@@ -178,7 +208,16 @@ async function onResumeGate(): Promise<void> {
 async function onForm(): Promise<void> {
   const profile = await getProfile();
   const form = document.querySelector<HTMLElement>('form') || document.body;
-  await waitFor(() => !!document.querySelector('#submit, input[type="submit"], form'), 8000);
+  await waitFor(() => !!document.querySelector('#submit, input[type="submit"], form') || isIneligible(), 8000);
+
+  // 0) Eligibility gate — Internshala blocks students from full-time jobs.
+  //    Skip these (do NOT apply, do NOT alert) and move on.
+  if (isIneligible()) {
+    closeAnyPopup();
+    await setState({ pendingApply: false });
+    await bump('skipped', 'Not eligible — skipped');
+    return void await gotoNext();
+  }
 
   // 1) Availability radio → "Yes, available to join immediately" if none chosen.
   if (!document.querySelector('input[name="confirm_availability"]:checked')) {
@@ -206,10 +245,28 @@ async function onForm(): Promise<void> {
   if (!submit) { await bump('skipped', 'No submit button'); return void await gotoNext(); }
 
   await humanDelay();
+  await setState({ pendingApply: true });   // confirmed on next load if we navigate away
   submit.click();
-  await bump('applied', 'Applied ✓');
-  await sleep(2500);   // let the confirmation load
-  await gotoNext();
+
+  // A real submit navigates AWAY from /application/form/. If we're still here
+  // after a few seconds, Internshala's validation rejected a field we couldn't
+  // fill (e.g. a custom 1–5 dropdown) — DON'T count it; alert loudly + pause.
+  const submitted = await waitFor(() => !isForm() || isIneligible(), 7000);
+  if (!submitted || isForm()) {
+    // Ineligible popup on submit → skip quietly and continue.
+    if (isIneligible()) {
+      closeAnyPopup();
+      await setState({ pendingApply: false });
+      await bump('skipped', 'Not eligible — skipped');
+      return void await gotoNext();
+    }
+    // Otherwise it's a field we couldn't fill (e.g. a rating) → alert + pause.
+    await setState({ active: false, pendingApply: false, current: 'Paused — a form field needs you.' });
+    notify('Jobora — needs your answer', 'An Internshala form has a field I couldn\'t fill (e.g. a rating). Finish it, then restart.');
+    alertUser('Internshala form needs your answer');   // loud beep + blink + banner
+  }
+  // If it DID navigate, resumeBulkIfActive() on the next page confirms the apply
+  // (recordApply + count) and continues — this code may not run post-navigation.
 }
 
 // ── Form-fill helpers ────────────────────────────────────────────────────────
