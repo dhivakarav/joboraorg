@@ -432,8 +432,8 @@ export default function Sidebar({ hostEl }: SidebarProps) {
                   </div>
                 )}
 
-                {/* Bulk auto-apply engine — LinkedIn only */}
-                {IS_LINKEDIN_HOST && <BulkApplyPanel />}
+                {/* Internshala bulk auto-apply walker */}
+                {IS_LINKEDIN_HOST ? null : <BulkApplyPanel />}
 
                 {/* Ban-risk meter — applications submitted today */}
                 <BanMeter />

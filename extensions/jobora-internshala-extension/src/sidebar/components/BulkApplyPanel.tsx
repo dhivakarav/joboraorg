@@ -143,7 +143,8 @@ export default function BulkApplyPanel() {
             🚀 Start auto-apply
           </button>
           <p className="text-[10px] text-ink-soft leading-snug">
-            Runs on {query ? `your saved search “${query}”` : 'the current results list'}.{' '}
+            Open an Internshala internships list, then Start — it walks each one
+            (Apply → Proceed → cover letter → Submit).{' '}
             {bypass ? 'Applies to ALL match levels.' : 'High-match only.'} Stops at {state.target}/day;
             pauses + notifies on questions it can't answer truthfully.
           </p>

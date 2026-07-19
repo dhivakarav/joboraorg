@@ -74,6 +74,10 @@ if (IS_INTERNSHALA) {
 // profile + resume-grounded AI. The user reviews and submits.
 initAutofill();
 
+// Drive the bulk walker across Internshala's multi-page apply flow (this runs
+// on every page load and continues the run based on which page we're on).
+if (IS_INTERNSHALA) void resumeBulkIfActive();
+
 
 // ── SPA navigation ─────────────────────────────────────────────────────────────
 watchNavigation((url) => {
