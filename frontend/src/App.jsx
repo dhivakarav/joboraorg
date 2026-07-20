@@ -9,6 +9,7 @@ import PendingApproval from "./pages/PendingApproval";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import Extensions from "./pages/Extensions";
 
 import Dashboard from "./pages/user/Dashboard";
 import FindJobs from "./pages/user/FindJobs";
@@ -59,6 +60,7 @@ export default function App() {
           )
         }
       />
+      <Route path="/extensions" element={<Extensions />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/pending" element={<PendingApproval />} />
