@@ -85,13 +85,16 @@ function ExtCard({ ext }) {
             Add to Chrome
           </a>
         ) : (
-          <span className="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-500">
-            Coming soon to the Chrome Web Store
-          </span>
+          <a
+            href={`${import.meta.env.BASE_URL}downloads/${ext.zip}`}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            ⬇ Download for Chrome
+          </a>
         )}
-        <a href={`${import.meta.env.BASE_URL}downloads/${ext.zip}`} className="text-center text-xs text-slate-500 underline hover:text-slate-700">
-          or download .zip (advanced: Developer mode → Load unpacked)
-        </a>
+        <p className="text-center text-[11px] text-slate-400">
+          Free — installs in 4 steps below. Chrome Web Store version coming soon.
+        </p>
       </div>
     </div>
   );
@@ -130,17 +133,17 @@ export default function Extensions() {
         </div>
 
         <div className="mx-auto mt-12 max-w-2xl rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-base font-bold text-slate-900">How it works</h2>
+          <h2 className="text-base font-bold text-slate-900">Install in 4 steps</h2>
           <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-slate-700">
-            <li>Install the extension for your job board (button above).</li>
-            <li>Open the Jobora side panel on that site and sign in with your Jobora account.</li>
-            <li>Turn on Auto-apply, open a search list, and press Start.</li>
-            <li>It applies to matching, eligible roles and pauses (with a loud alert) only when a question genuinely needs you.</li>
+            <li>Download the <b>.zip</b> above and <b>unzip</b> it (double-click) to a folder you'll keep.</li>
+            <li>Open <code className="rounded bg-slate-100 px-1">chrome://extensions</code> and turn on <b>Developer mode</b> (top-right).</li>
+            <li>Click <b>Load unpacked</b> and select the unzipped folder.</li>
+            <li>Open the Jobora side panel on the job site, sign in, turn on Auto-apply, and press <b>Start</b>.</li>
           </ol>
-          <p className="mt-4 text-xs text-slate-500">
-            Your data is handled per our{" "}
-            <a href={`${import.meta.env.BASE_URL}privacy`} className="underline">Privacy Policy</a>. You review your
-            profile and resume; Jobora never fabricates experience on your behalf.
+          <p className="mt-3 text-xs text-slate-500">
+            It applies to matching, eligible roles and pauses — with a loud alert — only when a
+            question genuinely needs you. Requires a free Jobora account. Chrome may show an
+            "unpacked extension" note; that's normal for direct installs.
           </p>
         </div>
       </main>
