@@ -17,7 +17,7 @@ const EXTENSIONS = [
     key: "linkedin",
     name: "Jobora — LinkedIn Copilot",
     tagline: "Honest match scoring + bulk auto-apply on LinkedIn",
-    zip: "/downloads/jobora-linkedin-extension.zip",
+    zip: "jobora-linkedin-extension.zip",
     features: [
       "Ruthlessly honest resume-match score on every job",
       "Bulk auto-apply that walks LinkedIn Easy Apply for you",
@@ -29,7 +29,7 @@ const EXTENSIONS = [
     key: "internshala",
     name: "Jobora — Internshala Copilot",
     tagline: "Auto-apply to eligible Internshala internships",
-    zip: "/downloads/jobora-internshala-extension.zip",
+    zip: "jobora-internshala-extension.zip",
     features: [
       "Scores every internship against your resume",
       "Walks Apply → Proceed → cover letter → Submit automatically",
@@ -89,7 +89,7 @@ function ExtCard({ ext }) {
             Coming soon to the Chrome Web Store
           </span>
         )}
-        <a href={ext.zip} className="text-center text-xs text-slate-500 underline hover:text-slate-700">
+        <a href={`${import.meta.env.BASE_URL}downloads/${ext.zip}`} className="text-center text-xs text-slate-500 underline hover:text-slate-700">
           or download .zip (advanced: Developer mode → Load unpacked)
         </a>
       </div>
@@ -139,7 +139,7 @@ export default function Extensions() {
           </ol>
           <p className="mt-4 text-xs text-slate-500">
             Your data is handled per our{" "}
-            <a href="/privacy" className="underline">Privacy Policy</a>. You review your
+            <a href={`${import.meta.env.BASE_URL}privacy`} className="underline">Privacy Policy</a>. You review your
             profile and resume; Jobora never fabricates experience on your behalf.
           </p>
         </div>
