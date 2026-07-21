@@ -9,6 +9,7 @@ const USER_NAV = [
   { to: "/app/dashboard", label: "Dashboard", icon: "▦" },
   { to: "/app/jobs", label: "Find Jobs", icon: "◎" },
   { to: "/app/matched", label: "Matched Jobs", icon: "◈" },
+  { to: "/app/extensions", label: "Get Extension", icon: "⬇" },
   { to: "/app/resume", label: "Resume", icon: "▤" },
   { to: "/app/filters", label: "Filters", icon: "⊜" },
   { to: "/app/activity", label: "Activity Log", icon: "≡" },

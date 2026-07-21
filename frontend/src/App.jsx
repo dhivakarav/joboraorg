@@ -19,6 +19,7 @@ import Filters from "./pages/user/Filters";
 import ActivityLog from "./pages/user/ActivityLog";
 import VerificationCenter from "./pages/user/VerificationCenter";
 import Settings from "./pages/user/Settings";
+import GetExtension from "./pages/user/GetExtension";
 
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserManagement from "./pages/admin/UserManagement";
@@ -77,6 +78,7 @@ export default function App() {
       <Route path="/app/activity" element={<RequireUser><ActivityLog /></RequireUser>} />
       <Route path="/app/verification" element={<RequireUser><VerificationCenter /></RequireUser>} />
       <Route path="/app/settings" element={<RequireUser><Settings /></RequireUser>} />
+      <Route path="/app/extensions" element={<RequireUser><GetExtension /></RequireUser>} />
 
       {/* Admin portal */}
       <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
