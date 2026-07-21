@@ -12,6 +12,9 @@ const STORE_URLS = {
   internshala: "",  // e.g. "https://chromewebstore.google.com/detail/<id>"
 };
 
+// Extensions are hosted as public GitHub Release assets (free, reliable CDN).
+const RELEASE_BASE = "https://github.com/dhivakarav/joboraorg/releases/download/v1.0";
+
 const EXTENSIONS = [
   {
     key: "linkedin",
@@ -86,7 +89,7 @@ function ExtCard({ ext }) {
           </a>
         ) : (
           <a
-            href={`${import.meta.env.BASE_URL}downloads/${ext.zip}`}
+            href={`${RELEASE_BASE}/${ext.zip}`}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             ⬇ Download for Chrome
